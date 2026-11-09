@@ -1,188 +1,78 @@
-// Supabase initialisieren
-const supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
-const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
-let mySlot = localStorage.getItem('quiz_assigned_slot');
-let activeStream = null;
+const SERVER_URL = "138-201-116-65.sslip.io";
+let localStream = null;
 
-// URLs generieren (Über Standard-Port 443 via Caddy)
-function getWhipUrl(playerID) {
-    return `https://${CONFIG.serverIp}/${playerID}/whip`;
-}
-
-function getWhepUrl(playerID) {
-    return `https://${CONFIG.serverIp}/${playerID}/whep`;
-}
-
-async function getSlotName(slotId) {
-    const { data } = await supabaseClient
-        .from('quiz_slots')
-        .select('player_name')
-        .eq('slot_id', slotId)
-        .maybeSingle(); // Verhindert den 406-Fehler, wenn noch kein Name existiert
-        
-    if (data && data.player_name) return data.player_name;
-    return localStorage.getItem(`quiz_name_${slotId}`) || slotId.toUpperCase();
-}
-
-window.onload = async function() {
-    if (mySlot) {
-        startStudio(mySlot);
-    } else {
-        showSlotSelector();
-    }
+async function startTest(myRole) {
+    const otherRole = myRole === 'cam1' ? 'cam2' : 'cam1';
     
-    // Realtime: Hört sofort zu, wenn der Admin einen Namen ändert
-    supabaseClient.channel('public:quiz_slots')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_slots' }, (payload) => {
-            if (payload.new) {
-                const slotId = payload.new.slot_id;
-                const newName = payload.new.player_name;
-                const nameEl = document.getElementById(`name-${slotId}`);
-                if (nameEl) {
-                    const isMe = (slotId === mySlot);
-                    nameEl.innerText = `${newName} ${isMe ? '(Du)' : ''}`;
-                }
-            }
-        })
-        .subscribe();
-};
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('test-screen').classList.remove('hidden');
+    document.getElementById('roleTitle').innerText = `Modus: ${myRole.toUpperCase()} (Empfängt: ${otherRole.toUpperCase()})`;
 
-async function showSlotSelector() {
-    const container = document.getElementById('slotButtonsContainer');
-    container.innerHTML = "";
-    for (const slot of slots) {
-        const name = await getSlotName(slot);
-        const btn = document.createElement('button');
-        btn.className = "slot-btn";
-        btn.innerText = `${name} (${slot.toUpperCase()})`;
-        btn.onclick = () => {
-            localStorage.setItem('quiz_assigned_slot', slot);
-            startStudio(slot);
-        };
-        container.appendChild(btn);
-    }
-}
-
-function resetSlot() {
-    if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
-    }
-    localStorage.removeItem('quiz_assigned_slot');
-    location.reload();
-}
-
-async function startStudio(slot) {
-    mySlot = slot;
-    document.getElementById('slot-screen').classList.add('hidden');
-    document.getElementById('studio-screen').classList.remove('hidden');
-    
-    const realName = await getSlotName(mySlot);
-    document.getElementById('displayName').innerText = realName;
-
-    await initGrid();
-    startPublishing();
-}
-
-async function initGrid() {
-    const grid = document.getElementById('playerGrid');
-    grid.innerHTML = "";
-
-    for (const slotId of slots) {
-        const isMe = (slotId === mySlot);
-        const realName = await getSlotName(slotId);
-
-        const card = document.createElement('div');
-        card.className = `player-card ${isMe ? 'is-me' : ''}`;
-        card.innerHTML = `
-            <div class="player-name" id="name-${slotId}">${realName} ${isMe ? '(Du)' : ''}</div>
-            <video id="vid-${slotId}" autoplay playsinline ${isMe ? 'muted' : ''}></video>
-            <div class="status" id="stat-${slotId}">Warte...</div>
-        `;
-        grid.appendChild(card);
-
-        if (!isMe) {
-            startReceiving(slotId, `vid-${slotId}`, `stat-${slotId}`);
-        }
-    }
-}
-
-// Eigene Kamera senden (WHIP)
-async function startPublishing() {
-    const statusEl = document.getElementById('connectionStatus');
+    // 1. Lokale Kamera starten & per WHIP an den Server senden
     try {
-        activeStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true });
-        
-        const myVideo = document.getElementById(`vid-${mySlot}`);
-        if (myVideo) myVideo.srcObject = activeStream;
-        
-        document.getElementById(`stat-${mySlot}`).innerText = "Live aktiv";
-        document.getElementById(`stat-${mySlot}`).style.color = "#4CAF50";
+        localStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true });
+        document.getElementById('localVideo').srcObject = localStream;
 
-        const pc = new RTCPeerConnection();
-        activeStream.getTracks().forEach(track => pc.addTrack(track, activeStream));
+        const pcPub = new RTCPeerConnection();
+        localStream.getTracks().forEach(track => pcPub.addTrack(track, localStream));
 
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+        const offer = await pcPub.createOffer();
+        await pcPub.setLocalDescription(offer);
 
-        const response = await fetch(getWhipUrl(mySlot), {
+        const responseUrl = `https://${SERVER_URL}/${myRole}/whip`;
+        const res = await fetch(responseUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/sdp' },
             body: offer.sdp
         });
 
-        if (!response.ok) throw new Error("Server hat Stream abgelehnt");
+        if (!res.ok) throw new Error("Server hat WHIP abgelehnt");
 
-        const answerSdp = await response.text();
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
+        const answerSdp = await res.text();
+        await pcPub.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
 
-        statusEl.style.color = "#4CAF50";
-        statusEl.innerText = "Status: Kamera erfolgreich übertragen!";
+        document.getElementById('localStatus').innerText = "Live gesendet (WHIP OK)";
+        document.getElementById('localStatus').style.color = "#4CAF50";
     } catch (err) {
         console.error(err);
-        statusEl.style.color = "#f44336";
-        statusEl.innerText = "Kamera-Fehler: " + err.message;
+        document.getElementById('localStatus').innerText = "Fehler: " + err.message;
+        document.getElementById('localStatus').style.color = "#f44336";
     }
+
+    // 2. Gegenstelle per WHEP abrufen
+    startReceiving(otherRole, 'remoteVideo', 'remoteStatus');
 }
 
-// Andere Spieler empfangen (WHEP)
-async function startReceiving(slotId, videoId, statusId) {
+async function startReceiving(targetRole, videoId, statusId) {
     const videoEl = document.getElementById(videoId);
     const statusEl = document.getElementById(statusId);
-    
-    const pc = new RTCPeerConnection();
-    pc.addTransceiver('video', { direction: 'recvonly' });
-    pc.addTransceiver('audio', { direction: 'recvonly' });
 
-    pc.ontrack = (event) => {
+    const pcSub = new RTCPeerConnection();
+    pcSub.addTransceiver('video', { direction: 'recvonly' });
+    pcSub.addTransceiver('audio', { direction: 'recvonly' });
+
+    pcSub.ontrack = (event) => {
         videoEl.srcObject = event.streams[0];
+        statusEl.innerText = "Verbunden (Empfange Stream)";
         statusEl.style.color = "#4CAF50";
-        statusEl.innerText = "Verbunden";
     };
 
     try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        const response = await fetch(getWhepUrl(slotId), {
+        const res = await fetch(`https://${SERVER_URL}/${targetRole}/whep`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/sdp' },
-            body: offer.sdp
+            body: (await pcSub.createOffer()).sdp
         });
 
-        if (!response.ok) throw new Error("Offline");
+        if (!res.ok) throw new Error("Stream offline");
 
-        const answerSdp = await response.text();
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
+        await pcSub.setLocalDescription(pcSub.localDescription);
+        const answerSdp = await res.text();
+        await pcSub.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
     } catch (err) {
-        statusEl.style.color = "#777";
-        statusEl.innerText = "Offline / Wartet...";
-        // Längeres Intervall (z.B. 10 Sekunden), um den Server zu entlasten
-        setTimeout(() => startReceiving(slotId, videoId, statusId), 10000);
+        statusEl.innerText = "Warte auf Gegenstelle...";
+        statusEl.style.color = "#ff9800";
+        // Alle 3 Sekunden erneut versuchen
+        setTimeout(() => startReceiving(targetRole, videoId, statusId), 3000);
     }
 }
-
-window.addEventListener('beforeunload', () => {
-    if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
-    }
-});
