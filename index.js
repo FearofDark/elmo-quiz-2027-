@@ -1,9 +1,31 @@
 const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
 
+// URL und Raumnamen ermitteln
+const urlParams = new URLSearchParams(window.location.search);
+const roomName = urlParams.get('room') || 'quiz-raum';
+const participantName = urlParams.get('name') || 'player-' + Math.floor(Math.random() * 1000);
+
+// QR-Code für das Handy generieren, sobald die Seite lädt
+window.addEventListener('DOMContentLoaded', () => {
+    // Erstellt die Handy-URL (nutzt dieselbe Vercel-Domain mit einem Cam-Suffix)
+    const mobileCamUrl = `${window.location.origin}${window.location.pathname}?room=${roomName}&name=${participantName}-Cam`;
+    
+    // QR-Code in das dafür vorgesehene Element rendern (nutzt die qrcode.js Bibliothek)
+    const qrContainer = document.getElementById('qrcode');
+    if (qrContainer) {
+        qrContainer.innerHTML = ''; // Vorherige leeren
+        new QRCode(qrContainer, {
+            text: mobileCamUrl,
+            width: 128,
+            height: 128,
+        });
+    }
+});
+
 document.getElementById('join-btn').addEventListener('click', async () => {
     try {
         console.log('Hole Token von Vercel...');
-        const res = await fetch('https://elmoquiz2027.vercel.app/api/token?room=quiz-raum');
+        const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}`);
         const data = await res.json();
         const token = data.token;
 
@@ -11,7 +33,6 @@ document.getElementById('join-btn').addEventListener('click', async () => {
         const room = new LivekitClient.Room({
             adaptiveStream: true,
             dynacast: true,
-            // Erzwingt WebSocket statt WebRTC-Data-Channels für das Signaling falls nötig
             websocketTransport: true 
         });
 
