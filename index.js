@@ -155,10 +155,10 @@ async function startReceiving(slotId, videoId, statusId) {
         statusEl.innerText = "Verbunden";
     };
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
     try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
         const response = await fetch(getWhepUrl(slotId), {
             method: 'POST',
             headers: { 'Content-Type': 'application/sdp' },
@@ -172,7 +172,8 @@ async function startReceiving(slotId, videoId, statusId) {
     } catch (err) {
         statusEl.style.color = "#777";
         statusEl.innerText = "Offline / Wartet...";
-        setTimeout(() => startReceiving(slotId, videoId, statusId), 4000);
+        // Längeres Intervall (z.B. 10 Sekunden), um den Server zu entlasten
+        setTimeout(() => startReceiving(slotId, videoId, statusId), 10000);
     }
 }
 
