@@ -6,11 +6,11 @@ let activeStream = null;
 
 // URLs generieren (Mit https:// und Caddy Reverse Proxy auf Port 8889)
 function getWhipUrl(playerID) {
-    return `https://${CONFIG.serverIp}:8889/${playerID}/whip`;
+    return `https://${CONFIG.serverIp}/${playerID}/whip`;
 }
 
 function getWhepUrl(playerID) {
-    return `https://${CONFIG.serverIp}:8889/${playerID}/whep`;
+    return `https://${CONFIG.serverIp}/${playerID}/whep`;
 }
 
 // Namen aus Supabase laden
