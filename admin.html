@@ -16,33 +16,29 @@
 </head>
 <body>
     <h1>Quizmaster Admin-Dashboard</h1>
-    <p>Live-Überwachung aller Kanäle (bis zu 8 Spieler)</p>
+    <p>Live-Überwachung aller 8 Spieler-Slots</p>
 
-    <div class="grid" id="adminGrid">
-        <!-- Wird per Script für alle 8 Spieler generiert -->
-    </div>
+    <div class="grid" id="adminGrid"></div>
 
     <script>
-        const players = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
+        const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
         const grid = document.getElementById('adminGrid');
 
-        // Für jeden Spieler eine Box generieren
-        players.forEach(pId => {
+        slots.forEach(slotId => {
             const card = document.createElement('div');
             card.className = "card";
-            card.id = `card-${pId}`;
+            card.id = `card-${slotId}`;
             card.innerHTML = `
-                <h3>${pId.toUpperCase()}</h3>
-                <video id="vid-${pId}" autoplay playsinline muted></video>
-                <div class="status" id="stat-${pId}">Warte auf Stream...</div>
+                <h3>${slotId.toUpperCase()}</h3>
+                <video id="vid-${slotId}" autoplay playsinline muted></video>
+                <div class="status" id="stat-${slotId}">Warte auf Stream...</div>
             `;
             grid.appendChild(card);
 
-            // WHEP-Stream abgreifen
-            subscribePlayer(pId, `vid-${pId}`, `stat-${pId}`, `card-${pId}`);
+            subscribePlayer(slotId, `vid-${slotId}`, `stat-${slotId}`, `card-${slotId}`);
         });
 
-        async function subscribePlayer(playerId, videoId, statusId, cardId) {
+        async function subscribePlayer(slotId, videoId, statusId, cardId) {
             const videoEl = document.getElementById(videoId);
             const statusEl = document.getElementById(statusId);
             const cardEl = document.getElementById(cardId);
@@ -62,7 +58,7 @@
             await pc.setLocalDescription(offer);
 
             try {
-                const response = await fetch(CONFIG.getWhepUrl(playerId), {
+                const response = await fetch(CONFIG.getWhepUrl(slotId), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/sdp' },
                     body: offer.sdp
@@ -77,8 +73,7 @@
                 statusEl.innerText = "Wartet auf Signal...";
                 cardEl.classList.remove('active');
                 
-                // Alle 3 Sekunden erneut prüfen, ob der Spieler online geht
-                setTimeout(() => subscribePlayer(playerId, videoId, statusId, cardId), 3000);
+                setTimeout(() => subscribePlayer(slotId, videoId, statusId, cardId), 3000);
             }
         }
     </script>

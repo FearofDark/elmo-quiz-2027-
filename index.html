@@ -2,40 +2,38 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Quiz - Spieler Login & Studio</title>
+    <title>Quiz - Spieler Studio</title>
     <script src="config.js"></script>
     <style>
         body { font-family: sans-serif; background: #111; color: #fff; text-align: center; margin: 0; padding: 20px; }
         .hidden { display: none !important; }
         
-        /* Login Box */
-        #login-screen { max-width: 400px; margin: 100px auto; background: #1a1a1a; padding: 30px; border-radius: 10px; border: 2px solid #00bcd4; }
-        input { padding: 10px; font-size: 16px; width: 80%; margin-bottom: 15px; border-radius: 5px; border: none; text-align: center; }
-        button { padding: 10px 20px; font-size: 16px; background: #00bcd4; color: #000; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; }
-        button:hover { background: #008ba3; }
+        /* Slot Auswahl Screen */
+        #slot-screen { max-width: 450px; margin: 80px auto; background: #1a1a1a; padding: 30px; border-radius: 10px; border: 2px solid #00bcd4; }
+        .slot-btn { display: block; width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; background: #333; color: #fff; border: 1px solid #555; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .slot-btn:hover { background: #00bcd4; color: #000; }
 
-        /* Studio Screen (Nach Login) */
+        /* Studio Screen */
         #studio-screen { max-width: 1200px; margin: 0 auto; }
         .top-bar { display: flex; justify-content: space-between; align-items: center; background: #1a1a1a; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; }
         
-        /* Grid für alle Spieler */
+        /* Grid */
         .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
-        .player-card { background: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 10px; text-align: center; position: relative; }
+        .player-card { background: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 10px; text-align: center; }
         .player-card.is-me { border-color: #00bcd4; }
         video { width: 100%; height: 180px; background: #000; border-radius: 4px; object-fit: cover; }
         .player-name { font-weight: bold; margin-bottom: 5px; color: #fff; }
         .status { font-size: 12px; color: #ff9800; }
+        .reset-link { margin-top: 15px; display: inline-block; color: #aaa; cursor: pointer; font-size: 14px; text-decoration: underline; }
     </style>
 </head>
 <body>
 
-    <!-- LOGIN SCREEN -->
-    <div id="login-screen">
-        <h2>Quiz-Anmeldung</h2>
-        <p>Gib deinen Spielernamen ein:</p>
-        <input type="text" id="usernameInput" placeholder="z.B. anna oder spieler1" autocomplete="off">
-        <br>
-        <button onclick="joinQuiz()">Dem Quiz beitreten</button>
+    <!-- SLOT AUSWAHL SCREEN -->
+    <div id="slot-screen">
+        <h2>Wähle deinen Spieler-Slot</h2>
+        <p>Klicke auf den Slot, den du für diesen Abend belegen möchtest:</p>
+        <div id="slotButtonsContainer"></div>
     </div>
 
     <!-- STUDIO / GRID SCREEN -->
@@ -45,60 +43,73 @@
             <div id="connectionStatus" style="color: #ff9800; font-weight: bold;">Verbinde Kamera...</div>
         </div>
 
-        <!-- 8er Grid für alle Spieler -->
-        <div class="grid-container" id="playerGrid">
-            <!-- Wird dynamisch gefüllt -->
-        </div>
+        <div class="grid-container" id="playerGrid"></div>
+        <br>
+        <span class="reset-link" onclick="resetSlot()">Slot wechseln / Zurücksetzen</span>
     </div>
 
     <script>
-        let myPlayerId = "";
-        // Grundlegende Spieler-Slots im Grid
-        let allPlayers = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
+        const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
+        let mySlot = localStorage.getItem('quiz_assigned_slot');
 
-        function joinQuiz() {
-            const input = document.getElementById('usernameInput').value.trim().toLowerCase();
-            if (!input) {
-                alert("Bitte gib einen gültigen Namen ein!");
-                return;
+        window.onload = function() {
+            if (mySlot) {
+                // Wenn schon ein Slot gespeichert ist, direkt starten!
+                startStudio(mySlot);
+            } else {
+                // Ansonsten Slot-Auswahl anzeigen
+                showSlotSelector();
             }
-            myPlayerId = input;
-            
-            // WICHTIG: Falls du einen eigenen Namen eingibst, der nicht in der Liste ist,
-            // fügen wir ihn ganz oben in die Liste ein, damit dein Video-Kasten garantiert existiert!
-            if (!allPlayers.includes(myPlayerId)) {
-                allPlayers.unshift(myPlayerId);
-            }
-            
-            // UI umschalten
-            document.getElementById('login-screen').classList.add('hidden');
+        };
+
+        function showSlotSelector() {
+            const container = document.getElementById('slotButtonsContainer');
+            container.innerHTML = "";
+            slots.forEach(slot => {
+                const btn = document.createElement('button');
+                btn.className = "slot-btn";
+                btn.innerText = `Als ${slot.toUpperCase()} beitreten`;
+                btn.onclick = () => {
+                    localStorage.setItem('quiz_assigned_slot', slot);
+                    startStudio(slot);
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function resetSlot() {
+            localStorage.removeItem('quiz_assigned_slot');
+            location.reload();
+        }
+
+        function startStudio(slot) {
+            mySlot = slot;
+            document.getElementById('slot-screen').classList.add('hidden');
             document.getElementById('studio-screen').classList.remove('hidden');
-            document.getElementById('displayName').innerText = myPlayerId.toUpperCase();
+            document.getElementById('displayName').innerText = mySlot.toUpperCase();
 
-            // Grid aufbauen und Streams starten
             initGrid();
             startPublishing();
         }
 
-        // Baut das Grid im HTML auf
+        // Baut das 8er Grid auf
         function initGrid() {
             const grid = document.getElementById('playerGrid');
             grid.innerHTML = "";
 
-            allPlayers.forEach(pId => {
-                const isMe = (pId === myPlayerId);
+            slots.forEach(slotId => {
+                const isMe = (slotId === mySlot);
                 const card = document.createElement('div');
                 card.className = `player-card ${isMe ? 'is-me' : ''}`;
                 card.innerHTML = `
-                    <div class="player-name">${pId.toUpperCase()} ${isMe ? '(Du)' : ''}</div>
-                    <video id="vid-${pId}" autoplay playsinline ${isMe ? 'muted' : ''}></video>
-                    <div class="status" id="stat-${pId}">Warte...</div>
+                    <div class="player-name">${slotId.toUpperCase()} ${isMe ? '(Du)' : ''}</div>
+                    <video id="vid-${slotId}" autoplay playsinline ${isMe ? 'muted' : ''}></video>
+                    <div class="status" id="stat-${slotId}">Warte...</div>
                 `;
                 grid.appendChild(card);
 
-                // Wenn es nicht ich bin, versuchen wir den Stream zu empfangen (WHEP)
                 if (!isMe) {
-                    startReceiving(pId, `vid-${pId}`, `stat-${pId}`);
+                    startReceiving(slotId, `vid-${slotId}`, `stat-${slotId}`);
                 }
             });
         }
@@ -107,15 +118,13 @@
         async function startPublishing() {
             const statusEl = document.getElementById('connectionStatus');
             try {
+                // WICHTIG: Kein 'Failed to fetch' mehr durch falsche IP-Config oder blockierte Ports
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true });
                 
-                // Eigenes Video direkt in die eigene Karte packen
-                const myVideo = document.getElementById(`vid-${myPlayerId}`);
-                if (!myVideo) throw new Error("Video-Element für diesen Spieler konnte nicht erstellt werden.");
-                
+                const myVideo = document.getElementById(`vid-${mySlot}`);
                 myVideo.srcObject = stream;
-                document.getElementById(`stat-${myPlayerId}`).innerText = "Live aktiv";
-                document.getElementById(`stat-${myPlayerId}`).style.color = "#4CAF50";
+                document.getElementById(`stat-${mySlot}`).innerText = "Live aktiv";
+                document.getElementById(`stat-${mySlot}`).style.color = "#4CAF50";
 
                 const pc = new RTCPeerConnection();
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
@@ -123,7 +132,7 @@
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
 
-                const response = await fetch(CONFIG.getWhipUrl(myPlayerId), {
+                const response = await fetch(CONFIG.getWhipUrl(mySlot), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/sdp' },
                     body: offer.sdp
@@ -143,8 +152,8 @@
             }
         }
 
-        // 2. Alle anderen Spieler empfangen (WHEP)
-        async function startReceiving(playerId, videoId, statusId) {
+        // 2. Andere Spieler empfangen (WHEP)
+        async function startReceiving(slotId, videoId, statusId) {
             const videoEl = document.getElementById(videoId);
             const statusEl = document.getElementById(statusId);
             
@@ -162,7 +171,7 @@
             await pc.setLocalDescription(offer);
 
             try {
-                const response = await fetch(CONFIG.getWhepUrl(playerId), {
+                const response = await fetch(CONFIG.getWhepUrl(slotId), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/sdp' },
                     body: offer.sdp
@@ -175,7 +184,7 @@
             } catch (err) {
                 statusEl.style.color = "#777";
                 statusEl.innerText = "Offline / Wartet...";
-                setTimeout(() => startReceiving(playerId, videoId, statusId), 4000);
+                setTimeout(() => startReceiving(slotId, videoId, statusId), 4000);
             }
         }
     </script>
