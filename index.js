@@ -22,11 +22,16 @@ async function startTest(myRole) {
         const responseUrl = `https://${SERVER_URL}/${myRole}/whip`;
         const res = await fetch(responseUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/sdp' },
+            headers: { 
+                'Content-Type': 'application/sdp' 
+            },
             body: offer.sdp
         });
 
-        if (!res.ok) throw new Error("Server hat WHIP abgelehnt");
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Server hat WHIP abgelehnt (${res.status}): ${errText}`);
+        }
 
         const answerSdp = await res.text();
         await pcPub.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
