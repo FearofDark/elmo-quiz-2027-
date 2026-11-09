@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz - Hauptseite (Empfänger)</title>
+    <!-- Zentraler Config-Aufruf -->
+    <script src="config.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #222; color: #fff; text-align: center; padding-top: 40px; }
+        video { width: 480px; height: 360px; background: #000; border: 2px solid #00bcd4; border-radius: 8px; }
+        .status { margin-top: 15px; font-weight: bold; color: #ff9800; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h2>Haupt-Quiz Broadcast (Empfang von Spieler 1)</h2>
+    <video id="remoteVideo" autoplay playsinline muted></video>
+    <div id="status" class="status">Warte auf Stream...</div>
+
+    <script>
+        async function startReceiving() {
+            const statusEl = document.getElementById('status');
+            const videoEl = document.getElementById('remoteVideo');
+            
+            const pc = new RTCPeerConnection();
+            pc.addTransceiver('video', { direction: 'recvonly' });
+            pc.addTransceiver('audio', { direction: 'recvonly' });
+
+            pc.ontrack = (event) => {
+                videoEl.srcObject = event.streams[0];
+                statusEl.style.color = "#4CAF50";
+                statusEl.innerText = "Status: Stream wird live empfangen!";
+            };
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            try {
+                // Holt die URL automatisch aus der config.js
+                const response = await fetch(CONFIG.whepUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/sdp' },
+                    body: offer.sdp
+                });
+
+                if (!response.ok) throw new Error("Stream offline");
+
+                const answerSdp = await response.text();
+                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
+            } catch (err) {
+                console.error(err);
+                statusEl.style.color = "#f44336";
+                statusEl.innerText = "Warte auf Sender... (Versuch erneut in 3s)";
+                setTimeout(startReceiving, 3000);
+            }
+        }
+
+        startReceiving();
+    </script>
+</body>
+</html>
