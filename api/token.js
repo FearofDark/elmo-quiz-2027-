@@ -1,10 +1,10 @@
 import { AccessToken } from 'livekit-server-sdk';
 
 export default async function handler(req, res) {
-    // CORS Header setzen, damit der Browser nicht blockiert
+    // CORS Header setzen
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept');
 
     if (req.method === 'OPTIONS') {
@@ -23,14 +23,14 @@ export default async function handler(req, res) {
         const apiSecret = process.env.LIVEKIT_API_SECRET;
 
         if (!apiKey || !apiSecret) {
-            console.error('FEHLER: LIVEKIT_API_KEY oder LIVEKIT_API_SECRET sind auf Vercel nicht gesetzt!');
+            console.error('LIVEKIT_API_KEY oder LIVEKIT_API_SECRET fehlen in den Vercel Environment Variables!');
             return res.status(500).json({ error: 'API Keys are missing in Vercel environment variables.' });
         }
 
         // Token mit LiveKit SDK erstellen
         const at = new AccessToken(apiKey, apiSecret, {
             identity: name,
-            ttl: '2h', // Token 2 Stunden gültig
+            ttl: '2h',
         });
 
         at.addGrant({
