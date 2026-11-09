@@ -1,83 +1,42 @@
-const SERVER_URL = "elmo-quiz.duckdns.org";
-let localStream = null;
+const HETZNER_LIVEKIT_URL = 'ws://138.201.116.65:7880';
 
-async function startTest(myRole) {
-    const otherRole = myRole === 'cam1' ? 'cam2' : 'cam1';
-    
-    document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('test-screen').classList.remove('hidden');
-    document.getElementById('roleTitle').innerText = `Modus: ${myRole.toUpperCase()} (Empfängt: ${otherRole.toUpperCase()})`;
-
-    // 1. Lokale Kamera starten & per WHIP an den Server senden
+document.getElementById('join-btn').addEventListener('click', async () => {
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true });
-        document.getElementById('localVideo').srcObject = localStream;
+        // 1. Token vom Vercel Backend abrufen
+        const res = await fetch('/api/token?room=quiz-raum');
+        const { token } = await res.json();
 
-        const pcPub = new RTCPeerConnection();
-        localStream.getTracks().forEach(track => pcPub.addTrack(track, localStream));
-
-        const offer = await pcPub.createOffer();
-        await pcPub.setLocalDescription(offer);
-
-        const responseUrl = `https://${SERVER_URL}/${myRole}/whip`;
-        const res = await fetch(responseUrl, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/sdp' 
-            },
-            body: offer.sdp
+        // 2. LiveKit Raum initialisieren
+        const room = new LivekitClient.Room({
+            adaptiveStream: true,
+            dynacast: true,
         });
 
-        if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`Server hat WHIP abgelehnt (${res.status}): ${errText}`);
+        // 3. Gegenspieler-Stream empfangen und anzeigen
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            if (track.kind === LivekitClient.Track.Kind.Video) {
+                const element = track.attach();
+                document.getElementById('remote-video').appendChild(element);
+            }
+        });
+
+        // 4. Mit dem Hetzner LiveKit-Server verbinden
+        await room.connect(HETZNER_LIVEKIT_URL, token);
+        console.log('Erfolgreich mit Hetzner verbunden!');
+
+        // 5. Eigene Kamera & Mikrofon aktivieren
+        await room.localParticipant.enableCameraAndMicrophone();
+        
+        // Eigenes Video anzeigen
+        const localTrack = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera).videoTrack;
+        if (localTrack) {
+            document.getElementById('local-video').appendChild(localTrack.attach());
         }
 
-        const answerSdp = await res.text();
-        await pcPub.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
+        document.getElementById('join-btn').style.display = 'none';
 
-        document.getElementById('localStatus').innerText = "Live gesendet (WHIP OK)";
-        document.getElementById('localStatus').style.color = "#4CAF50";
     } catch (err) {
-        console.error(err);
-        document.getElementById('localStatus').innerText = "Fehler: " + err.message;
-        document.getElementById('localStatus').style.color = "#f44336";
+        console.error('Fehler bei der Kameraverbindung:', err);
+        alert('Fehler beim Verbinden. Bitte Konsole prüfen!');
     }
-
-    // 2. Gegenstelle per WHEP abrufen
-    startReceiving(otherRole, 'remoteVideo', 'remoteStatus');
-}
-
-async function startReceiving(targetRole, videoId, statusId) {
-    const videoEl = document.getElementById(videoId);
-    const statusEl = document.getElementById(statusId);
-
-    const pcSub = new RTCPeerConnection();
-    pcSub.addTransceiver('video', { direction: 'recvonly' });
-    pcSub.addTransceiver('audio', { direction: 'recvonly' });
-
-    pcSub.ontrack = (event) => {
-        videoEl.srcObject = event.streams[0];
-        statusEl.innerText = "Verbunden (Empfange Stream)";
-        statusEl.style.color = "#4CAF50";
-    };
-
-    try {
-        const res = await fetch(`https://${SERVER_URL}/${targetRole}/whep`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/sdp' },
-            body: (await pcSub.createOffer()).sdp
-        });
-
-        if (!res.ok) throw new Error("Stream offline");
-
-        await pcSub.setLocalDescription(pcSub.localDescription);
-        const answerSdp = await res.text();
-        await pcSub.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
-    } catch (err) {
-        statusEl.innerText = "Warte auf Gegenstelle...";
-        statusEl.style.color = "#ff9800";
-        // Alle 3 Sekunden erneut versuchen
-        setTimeout(() => startReceiving(targetRole, videoId, statusId), 3000);
-    }
-}
+});
