@@ -2,21 +2,28 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Quiz - Kamera Sender</title>
-    <!-- Zentraler Config-Aufruf -->
+    <title>Quiz - Live Sender</title>
     <script src="config.js"></script>
     <style>
-        body { font-family: sans-serif; background: #111; color: #fff; text-align: center; padding-top: 40px; }
-        video { width: 400px; height: 300px; background: #000; border: 2px solid #444; border-radius: 8px; }
+        body { font-family: sans-serif; background: #111; color: #fff; text-align: center; padding-top: 30px; }
+        video { width: 480px; height: 360px; background: #000; border: 2px solid #444; border-radius: 8px; }
         .status { margin-top: 15px; font-weight: bold; color: #ff9800; font-size: 18px; }
+        .player-badge { background: #00bcd4; color: #000; display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-bottom: 15px; }
     </style>
 </head>
 <body>
     <h2>Dein Live-Kamera-Sender</h2>
+    <div id="playerBadge" class="player-badge">Lade Profil...</div>
+    <br>
     <video id="localVideo" autoplay playsinline muted></video>
     <div id="status" class="status">Verbinde mit Server...</div>
 
     <script>
+        // Spieler-ID aus URL auslesen (Standard ist 'spieler1', wenn nichts dranhängt)
+        const urlParams = new URLSearchParams(window.location.search);
+        const playerId = urlParams.get('player') || 'spieler1';
+        document.getElementById('playerBadge').innerText = `Profil: ${playerId.toUpperCase()}`;
+
         async function startPublishing() {
             const statusEl = document.getElementById('status');
             try {
@@ -29,8 +36,8 @@
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
 
-                // Holt die URL automatisch aus der config.js
-                const response = await fetch(CONFIG.whipUrl, {
+                // Holt die URL passend zur Spieler-ID aus der config.js
+                const response = await fetch(CONFIG.getWhipUrl(playerId), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/sdp' },
                     body: offer.sdp

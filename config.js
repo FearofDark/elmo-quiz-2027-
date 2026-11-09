@@ -1,8 +1,18 @@
-// Trage hier einfach deine aktuelle Hetzner-Server-IP ein
-const SERVER_IP = "138.201.116.65"; 
-
-// Der Rest wird automatisch zusammengesetzt
+// Zentrale Konfiguration für Streaming & Datenbank
 const CONFIG = {
-    whipUrl: `http://${SERVER_IP}:8889/spieler1/whip`,
-    whepUrl: `http://${SERVER_IP}:8889/spieler1/whep`
+    serverIp: "DEINE_HETZNER_IP", 
+
+    // Funktion, um dynamisch die WHIP-URL für jeden Spieler zu holen
+    getWhipUrl(playerID) {
+        return `http://${this.serverIp}:8889/${playerID}/whip`;
+    },
+
+    // Funktion, um dynamisch die WHEP-URL für jeden Spieler zu holen
+    getWhepUrl(playerID) {
+        return `http://${this.serverIp}:8889/${playerID}/whep`;
+    },
+
+    // Supabase-Anbindung
+    supabaseUrl: "https://vxnlnmudewvghcoshkux.supabase.co",
+    supabaseAnonKey: "sb_publishable_ulMqgspKj8cqBKE5Vydmog_tnyromm0"
 };
