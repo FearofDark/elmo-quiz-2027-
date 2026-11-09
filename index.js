@@ -1,4 +1,4 @@
-// Deine echte DuckDNS-Domain mit wss:// für die sichere Verbindung
+// Korrigierte URL mit wss:// und deiner DuckDNS-Domain
 const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
 
 document.getElementById('join-btn').addEventListener('click', async () => {
