@@ -3,18 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elmo Quiz - Kamera-Stream</title>
+    <title>Elmo Quiz - Spieler & Kameras</title>
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
-        video { width: 100%; max-width: 400px; height: auto; border-radius: 8px; border: 2px solid #4f46e5; }
-        .status { margin-top: 15px; font-size: 18px; color: #22c55e; }
+        body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; margin: 0; padding: 10px; text-align: center; }
+        .status { margin-bottom: 10px; font-size: 14px; color: #22c55e; }
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+        .cam-card { background: #1e293b; border-radius: 6px; padding: 5px; border: 1px solid #334155; }
+        .cam-card h4 { margin: 2px 0; font-size: 12px; color: #cbd5e1; }
+        .video-container { width: 100%; height: 120px; background: #000; border-radius: 4px; overflow: hidden; }
+        .video-container video { width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
 <body>
-    <h3>Dein Kamera-Stream</h3>
-    <div id="local-preview"></div>
     <div class="status" id="status-text">Verbinde Kamera...</div>
+    
+    <!-- Hier werden sowohl die eigene Vorschau als auch alle anderen Spieler gerendert -->
+    <div class="video-grid" id="video-grid"></div>
 
     <script>
         const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
@@ -22,32 +27,73 @@
         const roomName = urlParams.get('room') || 'quiz-raum';
         const participantName = urlParams.get('name') || 'Handy-Cam-' + Math.floor(Math.random() * 100);
 
+        function renderTrack(track, participant) {
+            const grid = document.getElementById('video-grid');
+            let card = document.getElementById(`participant-${participant.identity}`);
+            
+            if (!card) {
+                card = document.createElement('div');
+                card.className = 'cam-card';
+                card.id = `participant-${participant.identity}`;
+                card.innerHTML = `<h4>${participant.identity}</h4><div class="video-container" id="video-${participant.identity}"></div>`;
+                grid.appendChild(card);
+            }
+
+            const videoContainer = document.getElementById(`video-${participant.identity}`);
+            videoContainer.innerHTML = '';
+            const element = track.attach();
+            element.autoplay = true;
+            element.playsInline = true;
+            videoContainer.appendChild(element);
+        }
+
         async function startCamera() {
             try {
                 const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=${participantName}`);
                 const data = await res.json();
 
-                const room = new LivekitClient.Room({ websocketTransport: true });
+                const room = new LivekitClient.Room({ websocketTransport: true, adaptiveStream: true });
+
+                // 1. Auf Tracks von ANDEREN Spielern lauschen
+                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                    if (track.kind === LivekitClient.Track.Kind.Video) {
+                        renderTrack(track, participant);
+                    }
+                });
+
+                // 2. Teilnehmer löschen, wenn sie gehen
+                room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+                    const card = document.getElementById(`participant-${participant.identity}`);
+                    if (card) card.remove();
+                });
+
                 await room.connect(LIVEKIT_URL, data.token);
 
-                // Direkt Kamera und Mikrofon aktivieren und senden
+                // 3. Eigene Kamera aktivieren
                 await room.localParticipant.enableCameraAndMicrophone();
 
+                // 4. Eigenes Bild lokal in das Grid rendern
                 const localPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
                 if (localPub && localPub.videoTrack) {
-                    const previewContainer = document.getElementById('local-preview');
-                    const element = localPub.videoTrack.attach();
-                    previewContainer.appendChild(element);
+                    renderTrack(localPub.videoTrack, room.localParticipant);
                 }
 
-                document.getElementById('status-text').innerText = 'Live verbunden! Kamera aktiv.';
+                // 5. Bereits im Raum befindliche Mitspieler rendern
+                room.remoteParticipants.forEach((participant) => {
+                    participant.trackPublications.forEach((pub) => {
+                        if (pub.track && pub.track.kind === LivekitClient.Track.Kind.Video) {
+                            renderTrack(pub.track, participant);
+                        }
+                    });
+                });
+
+                document.getElementById('status-text').innerText = 'Live verbunden!';
             } catch (err) {
                 document.getElementById('status-text').innerText = 'Fehler: ' + err.message;
                 document.getElementById('status-text').style.color = '#ef4444';
             }
         }
 
-        // Direkt beim Laden der Seite starten
         window.addEventListener('load', startCamera);
     </script>
 </body>
