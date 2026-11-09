@@ -3,7 +3,7 @@ const supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.s
 const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
 
 function getWhepUrl(playerID) {
-    return `http://${CONFIG.serverIp}:8889/${playerID}/whep`;
+    return `https://${CONFIG.serverIp}:8889/${playerID}/whep`;
 }
 
 async function getSlotName(slotId) {
@@ -71,11 +71,9 @@ async function checkStreamStatus(slotId) {
         }
     }
     
-    // Alle 4 Sekunden den Status erneut prüfen
     setTimeout(() => checkStreamStatus(slotId), 4000);
 }
 
-// Tabelle beim Laden initialisieren
 window.onload = () => {
     renderTable();
 };

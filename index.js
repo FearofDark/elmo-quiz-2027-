@@ -4,13 +4,13 @@ const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spie
 let mySlot = localStorage.getItem('quiz_assigned_slot');
 let activeStream = null;
 
-// URLs generieren
+// URLs generieren (Mit https:// und Caddy Reverse Proxy auf Port 8889)
 function getWhipUrl(playerID) {
-    return `http://${CONFIG.serverIp}:8889/${playerID}/whip`;
+    return `https://${CONFIG.serverIp}:8889/${playerID}/whip`;
 }
 
 function getWhepUrl(playerID) {
-    return `http://${CONFIG.serverIp}:8889/${playerID}/whep`;
+    return `https://${CONFIG.serverIp}:8889/${playerID}/whep`;
 }
 
 // Namen aus Supabase laden
@@ -60,7 +60,6 @@ async function showSlotSelector() {
 }
 
 function resetSlot() {
-    // Kamera-Tracks stoppen falls vorhanden
     if (activeStream) {
         activeStream.getTracks().forEach(track => track.stop());
     }
@@ -177,7 +176,6 @@ async function startReceiving(slotId, videoId, statusId) {
     }
 }
 
-// Wenn der Tab geschlossen wird, Kamera-Stream sauber stoppen
 window.addEventListener('beforeunload', () => {
     if (activeStream) {
         activeStream.getTracks().forEach(track => track.stop());
