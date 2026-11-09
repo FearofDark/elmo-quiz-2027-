@@ -1,10 +1,10 @@
-// Korrigierte URL mit wss:// und deiner DuckDNS-Domain
+// Deine gesicherte LiveKit-Domain auf Hetzner
 const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
 
 document.getElementById('join-btn').addEventListener('click', async () => {
     try {
-        // 1. Token vom Vercel Backend abrufen
-        const res = await fetch('/api/token?room=quiz-raum');
+        // 1. Token direkt vom Vercel-Backend abrufen (mit absoluter URL)
+        const res = await fetch('https://elmoquiz2027.vercel.app/api/token?room=quiz-raum');
         const data = await res.json();
         const token = data.token;
 
