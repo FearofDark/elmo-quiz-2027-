@@ -7,9 +7,14 @@ function getWhepUrl(playerID) {
 }
 
 async function getSlotName(slotId) {
-    const { data } = await supabaseClient.from('quiz_slots').select('player_name').eq('slot_id', slotId).single();
+    const { data, error } = await supabaseClient
+        .from('quiz_slots')
+        .select('player_name')
+        .eq('slot_id', slotId)
+        .maybeSingle(); // Verhindert den 406/PGRST116 Fehler, falls ein Slot leer ist
+        
     if (data && data.player_name) return data.player_name;
-    return slotId.toUpperCase();
+    return localStorage.getItem(`quiz_name_${slotId}`) || slotId.toUpperCase();
 }
 
 async function renderTable() {
