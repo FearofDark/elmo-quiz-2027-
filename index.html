@@ -2,45 +2,63 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>WebRTC Minimal-Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Kamera Test (LiveKit)</title>
+    <!-- LiveKit Client SDK via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #111; color: #fff; text-align: center; padding: 20px; }
-        .container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
-        .box { background: #222; padding: 15px; border-radius: 8px; border: 1px solid #444; width: 320px; }
-        video { width: 100%; height: 200px; background: #000; border-radius: 4px; object-fit: cover; }
-        button { padding: 12px 20px; font-size: 16px; background: #00bcd4; color: #000; border: none; border-radius: 5px; cursor: pointer; margin: 5px; font-weight: bold; }
-        button:hover { background: #008ba3; }
-        .hidden { display: none !important; }
+        body { font-family: Arial, sans-serif; text-align: center; background: #111; color: #fff; margin-top: 50px; }
+        #video-container { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+        video { width: 320px; height: 240px; background: #000; border-radius: 8px; border: 2px solid #555; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-    <h1>WebRTC Minimal-Test</h1>
-    
-    <div id="setup-screen">
-        <p>Wähle, als was du dieses Gerät testen möchtest:</p>
-        <button onclick="startTest('cam1')">Als Cam 1 starten (z.B. PC)</button>
-        <button onclick="startTest('cam2')">Als Cam 2 starten (z.B. Handy)</button>
+    <h1>Quiz Kamera Test</h1>
+    <button id="join-btn">Raum beitreten & Kamera starten</button>
+
+    <div id="video-container">
+        <!-- Hier werden die Videostreams eingefügt -->
     </div>
 
-    <div id="test-screen" class="hidden">
-        <h2 id="roleTitle"></h2>
-        <div class="container">
-            <div class="box">
-                <h3>Deine Kamera (Senden)</h3>
-                <video id="localVideo" autoplay playsinline muted></video>
-                <p id="localStatus">Verbinde WHIP...</p>
-            </div>
-            <div class="box">
-                <h3>Andere Kamera (Empfangen)</h3>
-                <video id="remoteVideo" autoplay playsinline></video>
-                <p id="remoteStatus">Warte auf Gegenstelle...</p>
-            </div>
-        </div>
-        <br><br>
-        <button onclick="location.reload()">Neustarten / Rolle wechseln</button>
-    </div>
+    <script>
+        const wsUrl = 'ws://138.201.116.65:7880'; // Deine Hetzner IP mit LiveKit Port
+        const token = 'DEIN_GENERIERTES_TOKEN';    // Im Dev-Modus generieren wir das gleich
 
-<script src="index.js"></script>
+        document.getElementById('join-btn').addEventListener('click', async () => {
+            try {
+                const room = new LivekitClient.Room();
+
+                // Verbindung zum LiveKit-Server aufbauen
+                await room.connect(wsUrl, token);
+                console.log('Verbunden mit Raum:', room.name);
+
+                // Kamera und Mikrofon aktivieren
+                await room.localParticipant.enableCameraAndMicrophone();
+                
+                // Eigenes Video anzeigen
+                attachTrack(room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera).videoTrack);
+
+                // Zu hören, wenn andere Teilnehmer (der 2. Spieler) den Raum betreten
+                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                    if (track.kind === LivekitClient.Track.Kind.Video) {
+                        attachTrack(track);
+                    }
+                });
+
+                document.getElementById('join-btn').style.display = 'none';
+            } catch (error) {
+                console.error('Fehler beim Verbinden:', error);
+                alert('Verbindung fehlgeschlagen. Konsole prüfen.');
+            }
+        });
+
+        function attachTrack(track) {
+            const element = track.attach();
+            document.getElementById('video-container').appendChild(element);
+        }
+    </script>
+
 </body>
 </html>
