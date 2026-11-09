@@ -1,4 +1,4 @@
-const SERVER_URL = "138-201-116-65.sslip.io";
+const SERVER_URL = "elmo-quiz.duckdns.org";
 let localStream = null;
 
 async function startTest(myRole) {
