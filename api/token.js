@@ -1,36 +1,44 @@
-const { AccessToken } = require('livekit-server-sdk');
+export default async function handler(req, res) {
+    // 1. WICHTIG: Erlaube Anfragen von überall (auch von deinem lokalen VS Code Live Server)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+    try {
+        const roomName = req.query.room || 'quiz-raum';
+        const participantName = req.query.name || 'Zentrale-Viewer';
 
-  try {
-    const roomName = req.query.room || 'quiz-raum';
-    const participantName = req.query.name || `player-${Math.floor(Math.random() * 1000)}`;
+        // Dein LiveKit API Key & Secret (aus deinen Vercel Environment Variables)
+        const apiKey = process.env.LIVEKIT_API_KEY;
+        const apiSecret = process.env.LIVEKIT_API_SECRET;
+        const livekitHost = 'wss://elmo-quiz.duckdns.org';
 
-    const apiKey = 'devkey';
-    const apiSecret = 'secret';
+        if (!apiKey || !apiSecret) {
+            return res.status(500).json({ error: 'LiveKit API Keys nicht konfiguriert' });
+        }
 
-    const at = new AccessToken(apiKey, apiSecret, {
-      identity: participantName,
-      ttl: '2h',
-    });
+        // Token generieren (Beispiel mit livekit-server-sdk falls du Node.js nutzt)
+        const at = new window.AccessToken(apiKey, apiSecret, {
+            identity: participantName,
+        });
+        
+        at.addGrant({
+            roomJoin: true,
+            room: roomName,
+            canPublish: true,
+            canSubscribe: true,
+        });
 
-    at.addGrant({
-      roomJoin: true,
-      room: roomName,
-      canPublish: true,
-      canSubscribe: true,
-    });
+        const token = await at.toJwt();
+        return res.status(200).json({ token });
 
-    const token = await at.toJwt();
-    return res.status(200).json({ token, identity: participantName });
-  } catch (error) {
-    console.error('Token Generation Error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-};
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+}

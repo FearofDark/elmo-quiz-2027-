@@ -1,84 +1,54 @@
-// Supabase initialisieren
-const supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
-const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
+const modeSelect = document.getElementById('admin-mode');
+const countSelect = document.getElementById('admin-team-count');
+const container = document.getElementById('teams-config-container');
 
-function getWhepUrl(playerID) {
-    return `https://${CONFIG.serverIp}/${playerID}/whep`;
-}
+function renderBuilder() {
+    const count = parseInt(countSelect.value);
+    const mode = modeSelect.value;
+    container.innerHTML = '';
 
-async function getSlotName(slotId) {
-    const { data } = await supabaseClient
-        .from('quiz_slots')
-        .select('player_name')
-        .eq('slot_id', slotId)
-        .maybeSingle(); // Verhindert den 406-Fehler, wenn noch kein Name existiert
+    // Lade evtl. alte Werte
+    const saved = JSON.parse(localStorage.getItem('quiz_config') || '{}');
+    const oldTeams = saved.teams || [];
+
+    for (let i = 0; i < count; i++) {
+        const tData = oldTeams[i] || { name: `Team ${i+1}`, score: 0, players: [`Spieler ${i+1}`] };
         
-    if (data && data.player_name) return data.player_name;
-    return localStorage.getItem(`quiz_name_${slotId}`) || slotId.toUpperCase();
-}
-
-async function renderTable() {
-    const tbody = document.getElementById('adminTableBody');
-    tbody.innerHTML = "";
-
-    for (const slotId of slots) {
-        const currentName = await getSlotName(slotId);
-        const displayName = currentName === slotId.toUpperCase() ? '' : currentName;
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${slotId.toUpperCase()}</strong></td>
-            <td><input type="text" id="input-${slotId}" value="${displayName}" placeholder="Name eingeben..."></td>
-            <td><span id="status-${slotId}" class="badge offline">Prüfe...</span></td>
-            <td><button onclick="saveName('${slotId}')">Speichern</button></td>
-        `;
-        tbody.appendChild(tr);
-
-        checkStreamStatus(slotId);
+        let html = `<div class="team-block">
+            <label>Team ${i+1} Name</label>
+            <input type="text" class="t-name" value="${tData.name}">
+            <label>Punkte</label>
+            <input type="number" class="t-score" value="${tData.score}">
+            <label>Spieler in diesem Team (Komma-getrennt, z.B. Marvin, Samira)</label>
+            <input type="text" class="t-players" value="${Array.isArray(tData.players) ? tData.players.join(', ') : tData.players}">
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
     }
 }
 
-async function saveName(slotId) {
-    const inputVal = document.getElementById(`input-${slotId}`).value.trim();
-    const finalName = inputVal || slotId.toUpperCase();
-    
-    await supabaseClient.from('quiz_slots').upsert({ slot_id: slotId, player_name: finalName, updated_at: new Date() });
-    alert(`Name für ${slotId.toUpperCase()} gespeichert als: ${finalName}`);
-}
+modeSelect.addEventListener('change', renderBuilder);
+countSelect.addEventListener('change', renderBuilder);
+window.addEventListener('DOMContentLoaded', renderBuilder);
 
-async function checkStreamStatus(slotId) {
-    const statusBadge = document.getElementById(`status-${slotId}`);
-    try {
-        const pc = new RTCPeerConnection();
-        pc.addTransceiver('video', { direction: 'recvonly' });
-        
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+document.getElementById('save-admin-btn').addEventListener('click', () => {
+    const blocks = document.querySelectorAll('.team-block');
+    const teams = [];
 
-        const response = await fetch(getWhepUrl(slotId), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/sdp' },
-            body: offer.sdp
-        });
+    blocks.forEach((block) => {
+        const name = block.querySelector('.t-name').value;
+        const score = block.querySelector('.t-score').value;
+        const rawPlayers = block.querySelector('.t-players').value;
+        const players = rawPlayers.split(',').map(p => p.trim()).filter(p => p.length > 0);
 
-        if (response.ok) {
-            if (statusBadge) {
-                statusBadge.className = "badge online";
-                statusBadge.innerText = "ONLINE (LIVE)";
-            }
-        } else {
-            throw new Error();
-        }
-    } catch (err) {
-        if (statusBadge) {
-            statusBadge.className = "badge offline";
-            statusBadge.innerText = "Offline";
-        }
-    }
-    
-    setTimeout(() => checkStreamStatus(slotId), 4000);
-}
+        teams.push({ name, score, players });
+    });
 
-window.onload = () => {
-    renderTable();
-};
+    const config = {
+        mode: modeSelect.value,
+        teamCount: countSelect.value,
+        teams: teams
+    };
+
+    localStorage.setItem('quiz_config', JSON.stringify(config));
+    alert('Konfiguration gespeichert! Zentrale aktualisiert sich.');
+});

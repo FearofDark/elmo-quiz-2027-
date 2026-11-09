@@ -3,80 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elmo Quiz - Kamera Übersicht</title>
-    <!-- LiveKit Client SDK -->
+    <title>Quiz Zentrale - Skaliert (20 Spieler)</title>
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: #fff;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
+        :root {
+            --bg-dark: #090d16;
+            --panel-bg: #111827;
+            --card-bg: #1f2937;
+            --text-main: #f3f4f6;
+            --blue: #3b82f6;
+            --red: #ef4444;
+            --green: #22c55e;
+            --yellow: #eab308;
+            --gold: #fbbf24;
         }
-        h1 { margin-bottom: 10px; }
-        #connect-btn {
-            background: #4f46e5;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
-        #connect-btn:hover { background: #4338ca; }
-        
-        /* Responsives Grid für bis zu 20 Kameras */
-        .video-grid {
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; padding: 12px; }
+
+        .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 15px;
-            max-width: 1400px;
-            margin: 0 auto;
+            grid-template-columns: 300px 1fr 300px;
+            grid-template-rows: 1fr;
+            gap: 12px;
+            height: calc(100vh - 24px);
         }
-        .cam-card {
-            background: #1e293b;
+
+        /* Spalten erhalten Scrollbalken, falls es zu viele Spieler werden (z.B. 20 Stück) */
+        .side-column { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            height: 100%; 
+            overflow-y: auto; 
+            padding-right: 4px;
+        }
+
+        .side-column::-webkit-scrollbar { width: 4px; }
+        .side-column::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+
+        .team-card {
+            background: var(--panel-bg);
             border-radius: 8px;
-            padding: 10px;
-            border: 1px solid #334155;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            border: 2px solid transparent;
+            flex-shrink: 0;
+        }
+
+        .team-card.team-1 { border-color: var(--blue); }
+        .team-card.team-2 { border-color: var(--green); }
+        .team-card.team-3 { border-color: var(--red); }
+        .team-card.team-4 { border-color: var(--yellow); }
+
+        .team-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 13px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            text-transform: uppercase;
+        }
+
+        .team-score {
+            background: rgba(0,0,0,0.4);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .player-box {
+            background: var(--card-bg);
+            border-radius: 6px;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            height: 105px;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3px;
+            font-size: 11px;
+        }
+
+        .captain-badge {
+            background: var(--gold);
+            color: #000;
+            font-size: 8px;
+            font-weight: bold;
+            padding: 1px 3px;
+            border-radius: 3px;
+        }
+
+        .video-container {
+            flex: 1;
+            background: #000;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .video-container video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Zentrum mit Host-Banner oben */
+        .center-board {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            border: 1px solid #1f2937;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            padding: 15px;
+        }
+
+        .host-banner {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 180px;
+            height: 100px;
+            background: var(--card-bg);
+            border: 2px solid var(--blue);
+            border-radius: 6px;
+            padding: 4px;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        .host-banner span { font-size: 10px; font-weight: bold; color: var(--blue); margin-bottom: 2px; text-align: center; }
+        .host-banner .video-container { flex: 1; }
+
+        .center-content {
+            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-        }
-        .cam-card h3 {
-            font-size: 14px;
-            margin: 0 0 8px 0;
-            color: #cbd5e1;
-        }
-        .video-container {
-            width: 100%;
-            height: 180px;
-            background: #000;
-            border-radius: 6px;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
             justify-content: center;
+            text-align: center;
+            margin-top: 90px;
         }
-        .video-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+
+        .game-title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            color: var(--blue);
+            text-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+            margin-bottom: 8px;
         }
+
+        .status-text { color: #9ca3af; font-size: 13px; }
     </style>
 </head>
 <body>
 
-    <h1>Elmo Quiz - Live Kameras</h1>
-    <button id="connect-btn">Kamera-Übersicht starten</button>
+    <div class="dashboard-grid">
+        <div class="side-column" id="left-column"></div>
 
-    <!-- Das Grid, in dem sich die Kameras automatisch einreihen -->
-    <div class="video-grid" id="video-grid"></div>
+        <div class="center-board">
+            <div class="host-banner">
+                <span>HOST / REGIE</span>
+                <div class="video-container" id="video-slot-Host"></div>
+            </div>
+            <div class="center-content">
+                <h1 class="game-title" id="game-title">QUIZ NIGHT</h1>
+                <p class="status-text" id="game-status">Bereit für 20 Spieler...</p>
+            </div>
+        </div>
 
-    <!-- JavaScript Logik einbinden -->
+        <div class="side-column" id="right-column"></div>
+    </div>
+
     <script src="index.js"></script>
 </body>
 </html>

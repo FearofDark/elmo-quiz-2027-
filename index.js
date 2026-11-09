@@ -1,76 +1,66 @@
 const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
-const urlParams = new URLSearchParams(window.location.search);
-const roomName = urlParams.get('room') || 'quiz-raum';
+const roomName = 'quiz-raum';
 
-// WICHTIG: Erzeuge einen eindeutigen Namen für diesen Zentrale-Tab, 
-// damit LiveKit ihn nicht als Duplikat behandelt!
-const viewerName = 'Zentrale-' + Math.floor(Math.random() * 10000);
+// Setzt die Video-Streams basierend auf der Admin-Zuordnung ein
+function updateVideoAssignments(room) {
+    const savedMapping = localStorage.getItem('quiz_slot_mapping');
+    if (!savedMapping) return;
 
-function attachVideoTrack(track, participant) {
-    const grid = document.getElementById('video-grid');
-    
-    let card = document.getElementById(`participant-${participant.identity}`);
-    if (!card) {
-        card = document.createElement('div');
-        card.className = 'cam-card';
-        card.id = `participant-${participant.identity}`;
-        card.innerHTML = `<h3>${participant.identity}</h3><div class="video-container" id="video-${participant.identity}"></div>`;
-        grid.appendChild(card);
-    }
+    const slotMapping = JSON.parse(savedMapping);
 
-    const videoContainer = document.getElementById(`video-${participant.identity}`);
-    videoContainer.innerHTML = ''; 
-    
-    const element = track.attach();
-    element.autoplay = true;
-    element.playsInline = true;
-    videoContainer.appendChild(element);
-}
+    // Gehe alle 4 Slots durch und platziere die zugewiesenen Kameras
+    Object.keys(slotMapping).forEach(slotId => {
+        const assignedName = slotMapping[slotId];
+        const videoContainer = document.getElementById(`video-slot-${slotId}`);
 
-async function autoConnect() {
-    try {
-        console.log('Hole Zentrale-Token von Vercel...');
-        // Hier übergeben wir den eindeutigen viewerName
-        const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=${viewerName}`);
-        const data = await res.json();
+        if (!videoContainer) return;
 
-        console.log('Verbinde automatisch mit LiveKit Raum...');
-        const room = new LivekitClient.Room({ 
-            adaptiveStream: true,
-            dynacast: true,
-            websocketTransport: true 
-        });
+        if (!assignedName) {
+            videoContainer.innerHTML = ''; // Slot leeren, falls abgewählt
+            return;
+        }
 
-        // 1. Wenn neue Tracks dazukommen
-        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            if (track.kind === LivekitClient.Track.Kind.Video) {
-                attachVideoTrack(track, participant);
-            }
-        });
+        // Suche den passenden LiveKit-Teilnehmer anhand seines Namens
+        const participant = Array.from(room.remoteParticipants.values()).find(p => p.identity === assignedName);
 
-        // 2. Wenn jemand den Raum verlässt
-        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
-            const card = document.getElementById(`participant-${participant.identity}`);
-            if (card) {
-                card.remove();
-            }
-        });
-
-        await room.connect(LIVEKIT_URL, data.token);
-        console.log('Erfolgreich mit dem Raum verbunden!');
-
-        // 3. Alle bereits vorhandenen Teilnehmer rendern
-        room.remoteParticipants.forEach((participant) => {
-            participant.trackPublications.forEach((publication) => {
-                if (publication.track && publication.track.kind === LivekitClient.Track.Kind.Video) {
-                    attachVideoTrack(publication.track, participant);
+        if (participant) {
+            participant.trackPublications.forEach(pub => {
+                if (pub.track && pub.track.kind === LivekitClient.Track.Kind.Video) {
+                    videoContainer.innerHTML = '';
+                    const el = pub.track.attach();
+                    el.autoplay = true;
+                    el.playsInline = true;
+                    videoContainer.appendChild(el);
+                    console.log(`Kamera von ${assignedName} in ${slotId} platziert.`);
                 }
             });
+        }
+    });
+}
+
+// Live-Events & Verbindung
+async function initMainDisplay() {
+    try {
+        const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=Haupt-Display`);
+        const data = await res.json();
+
+        const room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+
+        // Wenn sich im Admin-Panel etwas ändert
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'quiz_slot_mapping') updateVideoAssignments(room);
         });
 
+        // Wenn Streams abboniert werden
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, () => updateVideoAssignments(room));
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => updateVideoAssignments(room));
+
+        await room.connect(LIVEKIT_URL, data.token);
+        console.log('Haupt-Display mit Hetzner LiveKit verbunden!');
+
     } catch (err) {
-        console.error('Verbindungsfehler:', err);
+        console.error('Fehler in index.js:', err);
     }
 }
 
-window.addEventListener('load', autoConnect);
+window.addEventListener('load', initMainDisplay);

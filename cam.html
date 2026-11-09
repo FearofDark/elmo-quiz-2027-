@@ -3,91 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elmo Quiz - Kamera</title>
+    <title>Quiz Kamera-Verbindung</title>
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; margin: 0; padding: 20px; text-align: center; }
-        button { background: #22c55e; color: white; border: none; padding: 16px 32px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 20px; }
-        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 20px; }
-        .cam-card { background: #1e293b; border-radius: 6px; padding: 5px; border: 1px solid #334155; }
-        .video-container { width: 100%; height: 120px; background: #000; border-radius: 4px; overflow: hidden; }
-        .video-container video { width: 100%; height: 100%; object-fit: cover; }
+        :root { --bg: #090d16; --card: #111827; --input: #1f2937; --blue: #3b82f6; --green: #22c55e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+        body { background: var(--bg); color: #fff; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        
+        .box { background: var(--card); padding: 25px; border-radius: 12px; width: 100%; max-width: 400px; text-align: center; border: 1px solid #374151; }
+        h2 { color: var(--blue); margin-bottom: 15px; }
+        input { width: 100%; padding: 12px; background: var(--input); border: 1px solid #4b5563; color: #fff; border-radius: 6px; margin-bottom: 15px; font-size: 16px; text-align: center; }
+        button { width: 100%; padding: 12px; background: var(--green); color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        
+        .stream-view { display: none; flex-direction: column; align-items: center; height: 100vh; justify-content: center; width: 100%; }
+        video { width: 100%; max-width: 500px; border-radius: 8px; border: 2px solid var(--blue); transform: scaleX(-1); }
+        .status { margin-top: 10px; color: #9ca3af; font-size: 14px; }
     </style>
 </head>
 <body>
-    <h2>Kamera-Stream</h2>
-    <p id="status-text">Klicke auf den Button, um die Kamera zu starten:</p>
-    <button id="start-btn">Kamera freigeben & Beitreten</button>
 
-    <div class="video-grid" id="video-grid"></div>
+    <div class="box" id="login-box">
+        <h2>Quiz Kamera-Join</h2>
+        <input type="text" id="player-name-input" placeholder="Dein Name (z.B. Marvin)" />
+        <button id="start-btn">Kamera starten & Beitreten</button>
+    </div>
+
+    <div class="stream-view" id="stream-box">
+        <video id="preview-video" autoplay playsinline muted></video>
+        <p class="status" id="status-text">Verbinde zum Server...</p>
+    </div>
 
     <script>
         const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
-        const urlParams = new URLSearchParams(window.location.search);
-        const roomName = urlParams.get('room') || 'quiz-raum';
-        const participantName = urlParams.get('name') || 'Handy-Cam-' + Math.floor(Math.random() * 100);
-
-        function renderTrack(track, participant) {
-            const grid = document.getElementById('video-grid');
-            let card = document.getElementById(`participant-${participant.identity}`);
-            
-            if (!card) {
-                card = document.createElement('div');
-                card.className = 'cam-card';
-                card.id = `participant-${participant.identity}`;
-                card.innerHTML = `<h4 style="margin:2px 0; font-size:12px;">${participant.identity}</h4><div class="video-container" id="video-${participant.identity}"></div>`;
-                grid.appendChild(card);
-            }
-
-            const videoContainer = document.getElementById(`video-${participant.identity}`);
-            videoContainer.innerHTML = '';
-            const element = track.attach();
-            element.autoplay = true;
-            element.playsInline = true;
-            videoContainer.appendChild(element);
-        }
+        const roomName = 'quiz-raum';
 
         document.getElementById('start-btn').addEventListener('click', async () => {
-            try {
-                document.getElementById('status-text').innerText = 'Verbinde Kamera...';
+            const name = document.getElementById('player-name-input').value.trim();
+            if (!name) return alert('Bitte gib deinen Namen ein!');
 
-                const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=${participantName}`);
+            document.getElementById('login-box').style.display = 'none';
+            document.getElementById('stream-box').style.display = 'flex';
+            document.getElementById('status-text').innerText = `Angemeldet als: ${name}. Verbinde...`;
+
+            try {
+                // Token von Vercel abrufen
+                const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=${encodeURIComponent(name)}`);
                 const data = await res.json();
 
-                const room = new LivekitClient.Room({ websocketTransport: true, adaptiveStream: true });
-
-                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-                    if (track.kind === LivekitClient.Track.Kind.Video) renderTrack(track, participant);
-                });
-
-                room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
-                    const card = document.getElementById(`participant-${participant.identity}`);
-                    if (card) card.remove();
-                });
-
-                await room.connect(LIVEKIT_URL, data.token);
-
-                // Aktiviert Kamera & Mikrofon auf Klick des Nutzers
+                // LiveKit Raum initialisieren
+                const room = new LivekitClient.Room();
                 await room.localParticipant.enableCameraAndMicrophone();
 
-                const localPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
-                if (localPub && localPub.videoTrack) {
-                    renderTrack(localPub.videoTrack, room.localParticipant);
-                }
+                // Eigenes Video anzeigen
+                const videoTrack = Array.from(room.localParticipant.videoTracks.values())[0].publication.track;
+                videoTrack.attach(document.getElementById('preview-video'));
 
-                room.remoteParticipants.forEach((participant) => {
-                    participant.trackPublications.forEach((pub) => {
-                        if (pub.track && pub.track.kind === LivekitClient.Track.Kind.Video) renderTrack(pub.track, participant);
-                    });
-                });
-
-                document.getElementById('start-btn').style.display = 'none';
-                document.getElementById('status-text').innerText = 'Live verbunden!';
-                document.getElementById('status-text').style.color = '#22c55e';
+                // Mit Hetzner Server verbinden
+                await room.connect(LIVEKIT_URL, data.token);
+                document.getElementById('status-text').innerText = `Erfolgreich verbunden! Du bist live.`;
 
             } catch (err) {
-                document.getElementById('status-text').innerText = 'Fehler: ' + err.message;
-                document.getElementById('status-text').style.color = '#ef4444';
+                console.error(err);
+                document.getElementById('status-text').innerText = `Fehler beim Verbinden: ${err.message}`;
             }
         });
     </script>

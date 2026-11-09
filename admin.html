@@ -2,49 +2,112 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Quizmaster - Admin Zentrale</title>
-    <!-- Supabase CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Config -->
-    <script src="config.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Regie-Zentrale</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; padding: 30px; max-width: 900px; margin: 0 auto; }
-        h1 { color: #00bcd4; text-align: center; margin-bottom: 5px; }
-        p.subtitle { text-align: center; color: #aaa; margin-bottom: 30px; }
+        body { background: #0b0f19; color: #f3f4f6; font-family: system-ui, sans-serif; padding: 20px; }
+        .admin-card { max-width: 900px; margin: 0 auto; background: #111827; border-radius: 8px; padding: 20px; border: 1px solid #374151; }
+        h1, h2 { color: #3b82f6; margin-bottom: 15px; }
         
-        .slot-table { width: 100%; border-collapse: collapse; background: #1e1e1e; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .slot-table th, .slot-table td { padding: 15px; text-align: left; border-bottom: 1px solid #333; }
-        .slot-table th { background: #252525; color: #00bcd4; }
-        
-        input[type="text"] { padding: 8px 12px; font-size: 14px; background: #2a2a2a; color: #fff; border: 1px solid #444; border-radius: 4px; width: 200px; }
-        input[type="text"]:focus { border-color: #00bcd4; outline: none; }
-        
-        .badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; }
-        .badge.offline { background: #333; color: #aaa; }
-        .badge.online { background: #4CAF50; color: #000; }
-        
-        button { padding: 8px 15px; background: #00bcd4; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #008ba3; }
+        .connected-box { background: #1f2937; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #22c55e; }
+        .connected-list { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .user-tag { background: #22c55e; color: #000; font-weight: bold; padding: 4px 10px; border-radius: 20px; font-size: 13px; }
+
+        .assignment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .slot-row { background: #1f2937; padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        select { background: #111827; color: #fff; border: 1px solid #4b5563; padding: 6px; border-radius: 4px; }
+        button { width: 100%; background: #22c55e; color: #fff; padding: 12px; font-weight: bold; border: none; border-radius: 6px; margin-top: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
+    <div class="admin-card">
+        <h1>Quiz Regie & Zuordnung</h1>
 
-    <h1>Quizmaster Admin-Zentrale</h1>
-    <p class="subtitle">Verwalte hier zentral die Spielernamen über Supabase.</p>
+        <!-- Live-Status der verbundenen Geräte -->
+        <div class="connected-box">
+            <h2>Live angemeldete Kameras im Raum:</h2>
+            <div class="connected-list" id="active-cams-list">
+                <span style="color:#9ca3af;">Warten auf Verbindungen...</span>
+            </div>
+        </div>
 
-    <table class="slot-table">
-        <thead>
-            <tr>
-                <th>System-Slot</th>
-                <th>Spielername / Team</th>
-                <th>Status</th>
-                <th>Aktion</th>
-            </tr>
-        </thead>
-        <tbody id="adminTableBody"></tbody>
-    </table>
+        <!-- Zuordnung zu den Slots -->
+        <h2>Slots zuweisen</h2>
+        <div class="assignment-grid">
+            <div>
+                <h3>Team 1 / Links</h3>
+                <div class="slot-row"><span>Slot 1:</span> <select id="assign-slot-1"></select></div>
+                <div class="slot-row"><span>Slot 2:</span> <select id="assign-slot-2"></select></div>
+            </div>
+            <div>
+                <h3>Team 2 / Rechts</h3>
+                <div class="slot-row"><span>Slot 3:</span> <select id="assign-slot-3"></select></div>
+                <div class="slot-row"><span>Slot 4:</span> <select id="assign-slot-4"></select></div>
+            </div>
+        </div>
 
-    <!-- Admin Logik-Datei -->
-    <script src="admin.js"></script>
+        <button id="apply-btn">Zuordnung an Zentrale senden</button>
+    </div>
+
+    <script>
+        const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
+        const activeCamsList = document.getElementById('active-cams-list');
+        let activeParticipants = [];
+
+        // Verbindet die Admin-Oberfläche passiv mit LiveKit, um angemeldete Handys zu erkennen
+        async function watchRoom() {
+            const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=quiz-raum&name=Admin-Regie`);
+            const data = await res.json();
+
+            const room = new LivekitClient.Room();
+            
+            function updateCams() {
+                activeParticipants = Array.from(room.remoteParticipants.values()).map(p => p.identity);
+                
+                // Live-Liste rendern
+                if (activeParticipants.length === 0) {
+                    activeCamsList.innerHTML = '<span style="color:#9ca3af;">Keine Handys verbunden</span>';
+                } else {
+                    activeCamsList.innerHTML = activeParticipants.map(name => `<span class="user-tag">📷 ${name}</span>`).join('');
+                }
+
+                // Dropdowns befüllen
+                for (let i = 1; i <= 4; i++) {
+                    const select = document.getElementById(`assign-slot-${i}`);
+                    const currentVal = select.value;
+                    select.innerHTML = '<option value="">-- Nicht belegt --</option>';
+                    activeParticipants.forEach(pName => {
+                        const opt = document.createElement('option');
+                        opt.value = pName;
+                        opt.textContent = pName;
+                        if (pName === currentVal) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+                }
+            }
+
+            room.on(LivekitClient.RoomEvent.ParticipantConnected, updateCams);
+            room.on(LivekitClient.RoomEvent.ParticipantDisconnected, updateCams);
+            
+            await room.connect(LIVEKIT_URL, data.token);
+            updateCams();
+        }
+
+        // Speichert die Zuordnung für index.js
+        document.getElementById('apply-btn').addEventListener('click', () => {
+            const slotMapping = {
+                "slot-1": document.getElementById('assign-slot-1').value,
+                "slot-2": document.getElementById('assign-slot-2').value,
+                "slot-3": document.getElementById('assign-slot-3').value,
+                "slot-4": document.getElementById('assign-slot-4').value,
+            };
+
+            localStorage.setItem('quiz_slot_mapping', JSON.stringify(slotMapping));
+            alert('Slot-Zuordnung erfolgreich gespeichert!');
+        });
+
+        window.addEventListener('load', watchRoom);
+    </script>
 </body>
 </html>
