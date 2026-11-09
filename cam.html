@@ -1,39 +1,4 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quiz Kamera-Verbindung</title>
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-    <style>
-        :root { --bg: #090d16; --card: #111827; --input: #1f2937; --blue: #3b82f6; --green: #22c55e; }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-        body { background: var(--bg); color: #fff; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        
-        .box { background: var(--card); padding: 25px; border-radius: 12px; width: 100%; max-width: 400px; text-align: center; border: 1px solid #374151; }
-        h2 { color: var(--blue); margin-bottom: 15px; }
-        input { width: 100%; padding: 12px; background: var(--input); border: 1px solid #4b5563; color: #fff; border-radius: 6px; margin-bottom: 15px; font-size: 16px; text-align: center; }
-        button { width: 100%; padding: 12px; background: var(--green); color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
-        
-        .stream-view { display: none; flex-direction: column; align-items: center; height: 100vh; justify-content: center; width: 100%; }
-        video { width: 100%; max-width: 500px; border-radius: 8px; border: 2px solid var(--blue); transform: scaleX(-1); }
-        .status { margin-top: 10px; color: #9ca3af; font-size: 14px; }
-    </style>
-</head>
-<body>
-
-    <div class="box" id="login-box">
-        <h2>Quiz Kamera-Join</h2>
-        <input type="text" id="player-name-input" placeholder="Dein Name (z.B. Marvin)" />
-        <button id="start-btn">Kamera starten & Beitreten</button>
-    </div>
-
-    <div class="stream-view" id="stream-box">
-        <video id="preview-video" autoplay playsinline muted></video>
-        <p class="status" id="status-text">Verbinde zum Server...</p>
-    </div>
-
-    <script>
+<script>
         const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
         const roomName = 'quiz-raum';
 
@@ -43,30 +8,46 @@
 
             document.getElementById('login-box').style.display = 'none';
             document.getElementById('stream-box').style.display = 'flex';
-            document.getElementById('status-text').innerText = `Angemeldet als: ${name}. Verbinde...`;
+            document.getElementById('status-text').innerText = `Hole Token und verbinde als "${name}"...`;
 
             try {
-                // Token von Vercel abrufen
+                // 1. Token von Vercel abrufen
                 const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=${encodeURIComponent(name)}`);
+                if (!res.ok) throw new Error(`Vercel API antwortete mit Status ${res.status}`);
                 const data = await res.json();
 
-                // LiveKit Raum initialisieren
-                const room = new LivekitClient.Room();
+                // 2. LiveKit Raum initialisieren
+                const room = new LivekitClient.Room({
+                    adaptiveStream: true,
+                    dynacast: true
+                });
+
+                document.getElementById('status-text').innerText = `Verbinde mit Hetzner Server...`;
+
+                // 3. WICHTIG: ERST mit dem Raum verbinden, BEVOR Tracks publiziert werden!
+                await room.connect(LIVEKIT_URL, data.token);
+
+                document.getElementById('status-text').innerText = `Verbunden! Aktiviere Kamera...`;
+
+                // 4. JETZT Kamera und Mikrofon freigeben und senden
                 await room.localParticipant.enableCameraAndMicrophone();
 
-                // Eigenes Video anzeigen
-                const videoTrack = Array.from(room.localParticipant.videoTracks.values())[0].publication.track;
-                videoTrack.attach(document.getElementById('preview-video'));
+                // 5. Eigenes Video in der Vorschau anzeigen
+                const localTrackPub = Array.from(room.localParticipant.videoTracks.values())[0];
+                if (localTrackPub && localTrackPub.track) {
+                    localTrackPub.track.attach(document.getElementById('preview-video'));
+                }
 
-                // Mit Hetzner Server verbinden
-                await room.connect(LIVEKIT_URL, data.token);
-                document.getElementById('status-text').innerText = `Erfolgreich verbunden! Du bist live.`;
+                document.getElementById('status-text').innerText = `Erfolgreich live im Raum!`;
 
             } catch (err) {
                 console.error(err);
-                document.getElementById('status-text').innerText = `Fehler beim Verbinden: ${err.message}`;
+                document.getElementById('status-text').innerText = `Fehler: ${err.message}`;
+                // Fallback: Bei Fehler zurück zum Login
+                setTimeout(() => {
+                    document.getElementById('login-box').style.display = 'block';
+                    document.getElementById('stream-box').style.display = 'none';
+                }, 4000);
             }
         });
     </script>
-</body>
-</html>
