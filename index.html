@@ -3,21 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <title>Quiz - Spieler Studio</title>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Config -->
     <script src="config.js"></script>
     <style>
         body { font-family: sans-serif; background: #111; color: #fff; text-align: center; margin: 0; padding: 20px; }
         .hidden { display: none !important; }
         
-        /* Slot Auswahl Screen */
         #slot-screen { max-width: 450px; margin: 80px auto; background: #1a1a1a; padding: 30px; border-radius: 10px; border: 2px solid #00bcd4; }
         .slot-btn { display: block; width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; background: #333; color: #fff; border: 1px solid #555; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .slot-btn:hover { background: #00bcd4; color: #000; }
 
-        /* Studio Screen */
         #studio-screen { max-width: 1200px; margin: 0 auto; }
         .top-bar { display: flex; justify-content: space-between; align-items: center; background: #1a1a1a; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; }
         
-        /* Grid */
         .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
         .player-card { background: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 10px; text-align: center; }
         .player-card.is-me { border-color: #00bcd4; }
@@ -32,7 +32,7 @@
     <!-- SLOT AUSWAHL SCREEN -->
     <div id="slot-screen">
         <h2>Wähle deinen Spieler-Slot</h2>
-        <p>Klicke auf den Slot, den du für diesen Abend belegen möchtest:</p>
+        <p>Klicke auf den Slot, den du belegen möchtest:</p>
         <div id="slotButtonsContainer"></div>
     </div>
 
@@ -48,145 +48,7 @@
         <span class="reset-link" onclick="resetSlot()">Slot wechseln / Zurücksetzen</span>
     </div>
 
-    <script>
-        const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
-        let mySlot = localStorage.getItem('quiz_assigned_slot');
-
-        window.onload = function() {
-            if (mySlot) {
-                // Wenn schon ein Slot gespeichert ist, direkt starten!
-                startStudio(mySlot);
-            } else {
-                // Ansonsten Slot-Auswahl anzeigen
-                showSlotSelector();
-            }
-        };
-
-        function showSlotSelector() {
-            const container = document.getElementById('slotButtonsContainer');
-            container.innerHTML = "";
-            slots.forEach(slot => {
-                const btn = document.createElement('button');
-                btn.className = "slot-btn";
-                btn.innerText = `Als ${slot.toUpperCase()} beitreten`;
-                btn.onclick = () => {
-                    localStorage.setItem('quiz_assigned_slot', slot);
-                    startStudio(slot);
-                };
-                container.appendChild(btn);
-            });
-        }
-
-        function resetSlot() {
-            localStorage.removeItem('quiz_assigned_slot');
-            location.reload();
-        }
-
-        function startStudio(slot) {
-            mySlot = slot;
-            document.getElementById('slot-screen').classList.add('hidden');
-            document.getElementById('studio-screen').classList.remove('hidden');
-            document.getElementById('displayName').innerText = mySlot.toUpperCase();
-
-            initGrid();
-            startPublishing();
-        }
-
-        // Baut das 8er Grid auf
-        function initGrid() {
-            const grid = document.getElementById('playerGrid');
-            grid.innerHTML = "";
-
-            slots.forEach(slotId => {
-                const isMe = (slotId === mySlot);
-                const card = document.createElement('div');
-                card.className = `player-card ${isMe ? 'is-me' : ''}`;
-                card.innerHTML = `
-                    <div class="player-name">${slotId.toUpperCase()} ${isMe ? '(Du)' : ''}</div>
-                    <video id="vid-${slotId}" autoplay playsinline ${isMe ? 'muted' : ''}></video>
-                    <div class="status" id="stat-${slotId}">Warte...</div>
-                `;
-                grid.appendChild(card);
-
-                if (!isMe) {
-                    startReceiving(slotId, `vid-${slotId}`, `stat-${slotId}`);
-                }
-            });
-        }
-
-        // 1. Eigene Kamera senden (WHIP)
-        async function startPublishing() {
-            const statusEl = document.getElementById('connectionStatus');
-            try {
-                // WICHTIG: Kein 'Failed to fetch' mehr durch falsche IP-Config oder blockierte Ports
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true });
-                
-                const myVideo = document.getElementById(`vid-${mySlot}`);
-                myVideo.srcObject = stream;
-                document.getElementById(`stat-${mySlot}`).innerText = "Live aktiv";
-                document.getElementById(`stat-${mySlot}`).style.color = "#4CAF50";
-
-                const pc = new RTCPeerConnection();
-                stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-
-                const response = await fetch(CONFIG.getWhipUrl(mySlot), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/sdp' },
-                    body: offer.sdp
-                });
-
-                if (!response.ok) throw new Error("Server hat Stream abgelehnt");
-
-                const answerSdp = await response.text();
-                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
-
-                statusEl.style.color = "#4CAF50";
-                statusEl.innerText = "Status: Kamera erfolgreich übertragen!";
-            } catch (err) {
-                console.error(err);
-                statusEl.style.color = "#f44336";
-                statusEl.innerText = "Kamera-Fehler: " + err.message;
-            }
-        }
-
-        // 2. Andere Spieler empfangen (WHEP)
-        async function startReceiving(slotId, videoId, statusId) {
-            const videoEl = document.getElementById(videoId);
-            const statusEl = document.getElementById(statusId);
-            
-            const pc = new RTCPeerConnection();
-            pc.addTransceiver('video', { direction: 'recvonly' });
-            pc.addTransceiver('audio', { direction: 'recvonly' });
-
-            pc.ontrack = (event) => {
-                videoEl.srcObject = event.streams[0];
-                statusEl.style.color = "#4CAF50";
-                statusEl.innerText = "Verbunden";
-            };
-
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-
-            try {
-                const response = await fetch(CONFIG.getWhepUrl(slotId), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/sdp' },
-                    body: offer.sdp
-                });
-
-                if (!response.ok) throw new Error("Offline");
-
-                const answerSdp = await response.text();
-                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
-            } catch (err) {
-                statusEl.style.color = "#777";
-                statusEl.innerText = "Offline / Wartet...";
-                setTimeout(() => startReceiving(slotId, videoId, statusId), 4000);
-            }
-        }
-    </script>
+    <!-- Logik-Datei -->
+    <script src="index.js"></script>
 </body>
 </html>
