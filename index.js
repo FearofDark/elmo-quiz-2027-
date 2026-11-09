@@ -4,7 +4,7 @@ const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spie
 let mySlot = localStorage.getItem('quiz_assigned_slot');
 let activeStream = null;
 
-// URLs generieren (Mit https:// und Caddy Reverse Proxy auf Port 8889)
+// URLs generieren (Über Standard-Port 443 via Caddy)
 function getWhipUrl(playerID) {
     return `https://${CONFIG.serverIp}/${playerID}/whip`;
 }

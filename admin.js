@@ -3,7 +3,7 @@ const supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.s
 const slots = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
 
 function getWhepUrl(playerID) {
-    return `https://${CONFIG.serverIp}:8889/${playerID}/whep`;
+    return `https://${CONFIG.serverIp}/${playerID}/whep`;
 }
 
 async function getSlotName(slotId) {
