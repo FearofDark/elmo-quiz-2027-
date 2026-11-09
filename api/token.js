@@ -1,11 +1,10 @@
 import { AccessToken } from 'livekit-server-sdk';
 
 export default async function handler(req, res) {
-    // CORS Header setzen
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    // CORS Header
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -22,12 +21,14 @@ export default async function handler(req, res) {
         const apiKey = process.env.LIVEKIT_API_KEY;
         const apiSecret = process.env.LIVEKIT_API_SECRET;
 
+        // Wenn die Keys auf Vercel fehlen, geben wir jetzt einen klaren JSON-Fehler statt 500 aus
         if (!apiKey || !apiSecret) {
-            console.error('LIVEKIT_API_KEY oder LIVEKIT_API_SECRET fehlen in den Vercel Environment Variables!');
-            return res.status(500).json({ error: 'API Keys are missing in Vercel environment variables.' });
+            console.error('FEHLER: LIVEKIT_API_KEY oder LIVEKIT_API_SECRET fehlen auf Vercel!');
+            return res.status(500).json({ 
+                error: 'Server-Konfigurationsfehler: LIVEKIT_API_KEY oder LIVEKIT_API_SECRET sind in den Vercel Environment Variables nicht gesetzt!' 
+            });
         }
 
-        // Token mit LiveKit SDK erstellen
         const at = new AccessToken(apiKey, apiSecret, {
             identity: name,
             ttl: '2h',
@@ -44,7 +45,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ token });
 
     } catch (error) {
-        console.error('Token Generation Error:', error);
-        return res.status(500).json({ error: error.message });
+        console.error('Token-Generierungsfehler:', error);
+        return res.status(500).json({ error: error.toString() });
     }
 }
