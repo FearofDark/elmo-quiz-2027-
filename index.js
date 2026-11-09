@@ -1,10 +1,12 @@
-const HETZNER_LIVEKIT_URL = 'ws://138.201.116.65:7880';
+// Deine echte DuckDNS-Domain mit wss:// für die sichere Verbindung
+const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
 
 document.getElementById('join-btn').addEventListener('click', async () => {
     try {
         // 1. Token vom Vercel Backend abrufen
         const res = await fetch('/api/token?room=quiz-raum');
-        const { token } = await res.json();
+        const data = await res.json();
+        const token = data.token;
 
         // 2. LiveKit Raum initialisieren
         const room = new LivekitClient.Room({
@@ -15,28 +17,37 @@ document.getElementById('join-btn').addEventListener('click', async () => {
         // 3. Gegenspieler-Stream empfangen und anzeigen
         room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === LivekitClient.Track.Kind.Video) {
+                const remoteContainer = document.getElementById('remote-video');
+                remoteContainer.innerHTML = ''; // Vorherige Elemente leeren
                 const element = track.attach();
-                document.getElementById('remote-video').appendChild(element);
+                element.style.width = "100%";
+                element.style.height = "100%";
+                remoteContainer.appendChild(element);
             }
         });
 
-        // 4. Mit dem Hetzner LiveKit-Server verbinden
-        await room.connect(HETZNER_LIVEKIT_URL, token);
-        console.log('Erfolgreich mit Hetzner verbunden!');
+        // 4. Mit dem LiveKit-Server über gesichertes WSS verbinden
+        await room.connect(LIVEKIT_URL, token);
+        console.log('Erfolgreich mit dem LiveKit-Server verbunden!');
 
         // 5. Eigene Kamera & Mikrofon aktivieren
         await room.localParticipant.enableCameraAndMicrophone();
         
-        // Eigenes Video anzeigen
-        const localTrack = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera).videoTrack;
-        if (localTrack) {
-            document.getElementById('local-video').appendChild(localTrack.attach());
+        // Eigenes Video direkt in den Container rendern
+        const localPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+        if (localPub && localPub.videoTrack) {
+            const localContainer = document.getElementById('local-video');
+            localContainer.innerHTML = '';
+            const element = localPub.videoTrack.attach();
+            element.style.width = "100%";
+            element.style.height = "100%";
+            localContainer.appendChild(element);
         }
 
         document.getElementById('join-btn').style.display = 'none';
 
     } catch (err) {
         console.error('Fehler bei der Kameraverbindung:', err);
-        alert('Fehler beim Verbinden. Bitte Konsole prüfen!');
+        alert('Fehler: ' + err.message);
     }
 });
