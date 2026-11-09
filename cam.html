@@ -1,53 +1,159 @@
-<script>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <!-- Wichtig für responsive Darstellung auf Mobilgeräten -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quiz Kamera-Join</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #090d16;
+            --panel-bg: #111827;
+            --card-bg: #1f2937;
+            --text-main: #f3f4f6;
+            --blue: #3b82f6;
+            --green: #22c55e;
+            --red: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; display: flex; align-items: center; justify-content: center; padding: 15px; }
+
+        .login-card {
+            background: var(--panel-bg);
+            border: 1px solid #374151;
+            padding: 24px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        h2 { font-size: 1.4rem; color: var(--blue); margin-bottom: 15px; }
+
+        input, select {
+            width: 100%;
+            padding: 14px;
+            background: var(--card-bg);
+            border: 1px solid #4b5563;
+            color: #fff;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: var(--green);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button:active { opacity: 0.8; }
+
+        .stream-view {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        video {
+            width: 100%;
+            max-width: 450px;
+            height: auto;
+            max-height: 70vh;
+            border-radius: 12px;
+            background: #000;
+            border: 2px solid var(--blue);
+            object-fit: cover;
+            transform: scaleX(-1); /* Frontkamera-Spiegelung */
+        }
+
+        .status {
+            margin-top: 15px;
+            color: #9ca3af;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Login Maske auf dem Handy -->
+    <div class="login-card" id="login-screen">
+        <h2>Quiz Kamera</h2>
+        <input type="text" id="player-name-input" placeholder="Dein Name (z.B. Marvin)" autocomplete="off" />
+        <button id="start-btn">Kamera aktivieren & Beitreten</button>
+    </div>
+
+    <!-- Aktiver Stream View -->
+    <div class="stream-view" id="stream-screen">
+        <video id="preview-video" autoplay playsinline muted></video>
+        <p class="status" id="status-text">Verbinde...</p>
+    </div>
+
+    <script>
         const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
         const roomName = 'quiz-raum';
 
         document.getElementById('start-btn').addEventListener('click', async () => {
-            const name = document.getElementById('player-name-input').value.trim();
-            if (!name) return alert('Bitte gib deinen Namen ein!');
+            const nameInput = document.getElementById('player-name-input').value.trim();
+            if (!nameInput) return alert('Bitte gib deinen Namen ein!');
 
-            document.getElementById('login-box').style.display = 'none';
-            document.getElementById('stream-box').style.display = 'flex';
-            document.getElementById('status-text').innerText = `Hole Token und verbinde als "${name}"...`;
+            // UI Umschalten
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('stream-screen').style.display = 'flex';
+            const statusText = document.getElementById('status-text');
+            statusText.innerText = `Token für "${nameInput}" wird angefordert...`;
 
             try {
-                // 1. Token von Vercel abrufen
-                const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=${encodeURIComponent(name)}`);
-                if (!res.ok) throw new Error(`Vercel API antwortete mit Status ${res.status}`);
+                // 1. Token abrufen
+                const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=${encodeURIComponent(nameInput)}`);
+                if (!res.ok) throw new Error(`Vercel Token API Fehler: ${res.status}`);
                 const data = await res.json();
 
-                // 2. LiveKit Raum initialisieren
+                // 2. LiveKit Instanz initialisieren
                 const room = new LivekitClient.Room({
                     adaptiveStream: true,
                     dynacast: true
                 });
 
-                document.getElementById('status-text').innerText = `Verbinde mit Hetzner Server...`;
+                statusText.innerText = `Verbinde mit Hetzner Server...`;
 
-                // 3. WICHTIG: ERST mit dem Raum verbinden, BEVOR Tracks publiziert werden!
+                // 3. Erst verbinden
                 await room.connect(LIVEKIT_URL, data.token);
 
-                document.getElementById('status-text').innerText = `Verbunden! Aktiviere Kamera...`;
+                statusText.innerText = `Verbunden! Öffne Kamera...`;
 
-                // 4. JETZT Kamera und Mikrofon freigeben und senden
+                // 4. Dann Kamera freischalten (nutzt standardmäßig die Frontkamera)
                 await room.localParticipant.enableCameraAndMicrophone();
 
-                // 5. Eigenes Video in der Vorschau anzeigen
-                const localTrackPub = Array.from(room.localParticipant.videoTracks.values())[0];
-                if (localTrackPub && localTrackPub.track) {
-                    localTrackPub.track.attach(document.getElementById('preview-video'));
+                // 5. Lokalen Track im Handy-Video anzeigen
+                const tracks = Array.from(room.localParticipant.videoTracks.values());
+                if (tracks.length > 0 && tracks[0].track) {
+                    tracks[0].track.attach(document.getElementById('preview-video'));
                 }
 
-                document.getElementById('status-text').innerText = `Erfolgreich live im Raum!`;
+                statusText.innerText = `🟢 Live als "${nameInput}"!`;
 
             } catch (err) {
                 console.error(err);
-                document.getElementById('status-text').innerText = `Fehler: ${err.message}`;
-                // Fallback: Bei Fehler zurück zum Login
-                setTimeout(() => {
-                    document.getElementById('login-box').style.display = 'block';
-                    document.getElementById('stream-box').style.display = 'none';
-                }, 4000);
+                statusText.style.color = 'var(--red)';
+                statusText.innerText = `Fehler: ${err.message}`;
             }
         });
     </script>
+</body>
+</html>
