@@ -7,11 +7,11 @@ function getWhepUrl(playerID) {
 }
 
 async function getSlotName(slotId) {
-    const { data, error } = await supabaseClient
+    const { data } = await supabaseClient
         .from('quiz_slots')
         .select('player_name')
         .eq('slot_id', slotId)
-        .maybeSingle(); // Verhindert den 406/PGRST116 Fehler, falls ein Slot leer ist
+        .maybeSingle(); // Verhindert den 406-Fehler, wenn noch kein Name existiert
         
     if (data && data.player_name) return data.player_name;
     return localStorage.getItem(`quiz_name_${slotId}`) || slotId.toUpperCase();
