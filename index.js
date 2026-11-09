@@ -1,24 +1,24 @@
-// Deine gesicherte LiveKit-Domain auf Hetzner
 const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
 
 document.getElementById('join-btn').addEventListener('click', async () => {
     try {
-        // 1. Token direkt vom Vercel-Backend abrufen (mit absoluter URL)
+        console.log('Hole Token von Vercel...');
         const res = await fetch('https://elmoquiz2027.vercel.app/api/token?room=quiz-raum');
         const data = await res.json();
         const token = data.token;
 
-        // 2. LiveKit Raum initialisieren
+        console.log('Verbinde mit LiveKit Raum...');
         const room = new LivekitClient.Room({
             adaptiveStream: true,
             dynacast: true,
+            // Erzwingt WebSocket statt WebRTC-Data-Channels für das Signaling falls nötig
+            websocketTransport: true 
         });
 
-        // 3. Gegenspieler-Stream empfangen und anzeigen
         room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === LivekitClient.Track.Kind.Video) {
                 const remoteContainer = document.getElementById('remote-video');
-                remoteContainer.innerHTML = ''; // Vorherige Elemente leeren
+                remoteContainer.innerHTML = '';
                 const element = track.attach();
                 element.style.width = "100%";
                 element.style.height = "100%";
@@ -26,14 +26,11 @@ document.getElementById('join-btn').addEventListener('click', async () => {
             }
         });
 
-        // 4. Mit dem LiveKit-Server über gesichertes WSS verbinden
         await room.connect(LIVEKIT_URL, token);
-        console.log('Erfolgreich mit dem LiveKit-Server verbunden!');
+        console.log('Erfolgreich verbunden!');
 
-        // 5. Eigene Kamera & Mikrofon aktivieren
         await room.localParticipant.enableCameraAndMicrophone();
         
-        // Eigenes Video direkt in den Container rendern
         const localPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
         if (localPub && localPub.videoTrack) {
             const localContainer = document.getElementById('local-video');
