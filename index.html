@@ -32,7 +32,7 @@
     <!-- LOGIN SCREEN -->
     <div id="login-screen">
         <h2>Quiz-Anmeldung</h2>
-        <p>Gib deinen Spielernamen ein, um dem Studio beizutreten:</p>
+        <p>Gib deinen Spielernamen ein:</p>
         <input type="text" id="usernameInput" placeholder="z.B. anna oder spieler1" autocomplete="off">
         <br>
         <button onclick="joinQuiz()">Dem Quiz beitreten</button>
@@ -53,8 +53,8 @@
 
     <script>
         let myPlayerId = "";
-        // Liste aller Spieler, die im Quiz mitmachen (kannst du beliebig erweitern bis zu 8)
-        const allPossiblePlayers = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
+        // Grundlegende Spieler-Slots im Grid
+        let allPlayers = ["spieler1", "spieler2", "spieler3", "spieler4", "spieler5", "spieler6", "spieler7", "spieler8"];
 
         function joinQuiz() {
             const input = document.getElementById('usernameInput').value.trim().toLowerCase();
@@ -63,6 +63,12 @@
                 return;
             }
             myPlayerId = input;
+            
+            // WICHTIG: Falls du einen eigenen Namen eingibst, der nicht in der Liste ist,
+            // fügen wir ihn ganz oben in die Liste ein, damit dein Video-Kasten garantiert existiert!
+            if (!allPlayers.includes(myPlayerId)) {
+                allPlayers.unshift(myPlayerId);
+            }
             
             // UI umschalten
             document.getElementById('login-screen').classList.add('hidden');
@@ -74,12 +80,12 @@
             startPublishing();
         }
 
-        // Baut das 8er Grid im HTML auf
+        // Baut das Grid im HTML auf
         function initGrid() {
             const grid = document.getElementById('playerGrid');
             grid.innerHTML = "";
 
-            allPossiblePlayers.forEach(pId => {
+            allPlayers.forEach(pId => {
                 const isMe = (pId === myPlayerId);
                 const card = document.createElement('div');
                 card.className = `player-card ${isMe ? 'is-me' : ''}`;
@@ -90,8 +96,7 @@
                 `;
                 grid.appendChild(card);
 
-                // Wenn es ICH bin, speisen wir gleich den lokalen Stream ein. 
-                // Alle anderen empfangen wir per WHEP!
+                // Wenn es nicht ich bin, versuchen wir den Stream zu empfangen (WHEP)
                 if (!isMe) {
                     startReceiving(pId, `vid-${pId}`, `stat-${pId}`);
                 }
@@ -104,8 +109,10 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true });
                 
-                // Eigenes Video direkt in die "Eigene Karte" packen
+                // Eigenes Video direkt in die eigene Karte packen
                 const myVideo = document.getElementById(`vid-${myPlayerId}`);
+                if (!myVideo) throw new Error("Video-Element für diesen Spieler konnte nicht erstellt werden.");
+                
                 myVideo.srcObject = stream;
                 document.getElementById(`stat-${myPlayerId}`).innerText = "Live aktiv";
                 document.getElementById(`stat-${myPlayerId}`).style.color = "#4CAF50";
@@ -168,7 +175,6 @@
             } catch (err) {
                 statusEl.style.color = "#777";
                 statusEl.innerText = "Offline / Wartet...";
-                // Alle 4 Sekunden versuchen, ob der Spieler online kommt
                 setTimeout(() => startReceiving(playerId, videoId, statusId), 4000);
             }
         }
