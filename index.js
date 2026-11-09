@@ -1,71 +1,57 @@
 const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
-
-// URL und Raumnamen ermitteln
 const urlParams = new URLSearchParams(window.location.search);
 const roomName = urlParams.get('room') || 'quiz-raum';
-const participantName = urlParams.get('name') || 'player-' + Math.floor(Math.random() * 1000);
 
-// QR-Code für das Handy generieren, sobald die Seite lädt
-window.addEventListener('DOMContentLoaded', () => {
-    // Erstellt die Handy-URL (nutzt dieselbe Vercel-Domain mit einem Cam-Suffix)
-    const mobileCamUrl = `${window.location.origin}${window.location.pathname}?room=${roomName}&name=${participantName}-Cam`;
-    
-    // QR-Code in das dafür vorgesehene Element rendern (nutzt die qrcode.js Bibliothek)
-    const qrContainer = document.getElementById('qrcode');
-    if (qrContainer) {
-        qrContainer.innerHTML = ''; // Vorherige leeren
-        new QRCode(qrContainer, {
-            text: mobileCamUrl,
-            width: 128,
-            height: 128,
-        });
-    }
-});
-
-document.getElementById('join-btn').addEventListener('click', async () => {
+async function autoConnect() {
     try {
-        console.log('Hole Token von Vercel...');
-        const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}`);
+        console.log('Hole Zentrale-Token von Vercel...');
+        const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=Zentrale-Viewer`);
         const data = await res.json();
-        const token = data.token;
 
-        console.log('Verbinde mit LiveKit Raum...');
-        const room = new LivekitClient.Room({
+        console.log('Verbinde automatisch mit LiveKit Raum...');
+        const room = new LivekitClient.Room({ 
             adaptiveStream: true,
             dynacast: true,
             websocketTransport: true 
         });
 
-        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        // Wenn ein Spieler seine Kamera einschaltet / betritt
+        room.on(LivekitClient.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === LivekitClient.Track.Kind.Video) {
-                const remoteContainer = document.getElementById('remote-video');
-                remoteContainer.innerHTML = '';
+                const grid = document.getElementById('video-grid');
+                
+                // Prüfen ob die Box für diesen Teilnehmer schon existiert
+                let card = document.getElementById(`participant-${participant.identity}`);
+                if (!card) {
+                    card = document.createElement('div');
+                    card.className = 'cam-card';
+                    card.id = `participant-${participant.identity}`;
+                    card.innerHTML = `<h3>${participant.identity}</h3><div class="video-container" id="video-${participant.identity}"></div>`;
+                    grid.appendChild(card);
+                }
+
+                const videoContainer = document.getElementById(`video-${participant.identity}`);
+                videoContainer.innerHTML = ''; // Vorherige Streams bereinigen
                 const element = track.attach();
-                element.style.width = "100%";
-                element.style.height = "100%";
-                remoteContainer.appendChild(element);
+                videoContainer.appendChild(element);
             }
         });
 
-        await room.connect(LIVEKIT_URL, token);
-        console.log('Erfolgreich verbunden!');
+        // Wenn ein Teilnehmer den Raum verlässt
+        room.on(LivekitClient.ParticipantDisconnected, (participant) => {
+            const card = document.getElementById(`participant-${participant.identity}`);
+            if (card) {
+                card.remove();
+            }
+        });
 
-        await room.localParticipant.enableCameraAndMicrophone();
-        
-        const localPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
-        if (localPub && localPub.videoTrack) {
-            const localContainer = document.getElementById('local-video');
-            localContainer.innerHTML = '';
-            const element = localPub.videoTrack.attach();
-            element.style.width = "100%";
-            element.style.height = "100%";
-            localContainer.appendChild(element);
-        }
-
-        document.getElementById('join-btn').style.display = 'none';
+        await room.connect(LIVEKIT_URL, data.token);
+        console.log('Erfolgreich mit dem Raum verbunden!');
 
     } catch (err) {
-        console.error('Fehler bei der Kameraverbindung:', err);
-        alert('Fehler: ' + err.message);
+        console.error('Verbindungsfehler:', err);
     }
-});
+}
+
+// Startet die Verbindung direkt beim Laden der Seite
+window.addEventListener('load', autoConnect);

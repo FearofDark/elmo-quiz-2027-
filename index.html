@@ -3,64 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elmo Quiz - Zentrale</title>
+    <title>Elmo Quiz - Kamera Übersicht</title>
+    <!-- LiveKit Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #111; color: #fff; text-align: center; padding: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
-        .cam-card { background: #222; border-radius: 8px; padding: 10px; border: 2px solid #444; }
-        video { width: 100%; height: 200px; object-fit: cover; background: #000; border-radius: 4px; }
-        button { background: #4f46e5; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; margin-bottom: 20px; }
-        button:hover { background: #4338ca; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 { margin-bottom: 10px; }
+        #connect-btn {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        #connect-btn:hover { background: #4338ca; }
+        
+        /* Responsives Grid für bis zu 20 Kameras */
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 15px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .cam-card {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .cam-card h3 {
+            font-size: 14px;
+            margin: 0 0 8px 0;
+            color: #cbd5e1;
+        }
+        .video-container {
+            width: 100%;
+            height: 180px;
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
     </style>
 </head>
 <body>
-    <h1>Elmo Quiz - Live Übersicht</h1>
-    <button id="connect-btn">Mit Raum verbinden & Kameras laden</button>
 
-    <!-- Hier landen alle ankommenden Kamera-Streams automatisch -->
-    <div class="grid" id="video-grid"></div>
+    <h1>Elmo Quiz - Live Kameras</h1>
+    <button id="connect-btn">Kamera-Übersicht starten</button>
 
-    <script>
-        const LIVEKIT_URL = 'wss://elmo-quiz.duckdns.org';
-        const urlParams = new URLSearchParams(window.location.search);
-        const roomName = urlParams.get('room') || 'quiz-raum';
+    <!-- Das Grid, in dem sich die Kameras automatisch einreihen -->
+    <div class="video-grid" id="video-grid"></div>
 
-        document.getElementById('connect-btn').addEventListener('click', async () => {
-            try {
-                const res = await fetch(`https://elmoquiz2027.vercel.app/api/token?room=${roomName}&name=Zentrale-Viewer`);
-                const data = await res.json();
-
-                const room = new LivekitClient.Room({ websocketTransport: true });
-
-                // Wenn ein Teilnehmer (Handy oder anderer Tab) seine Kamera sendet:
-                room.on(LivekitClient.TrackSubscribed, (track, publication, participant) => {
-                    if (track.kind === LivekitClient.Track.Kind.Video) {
-                        const grid = document.getElementById('video-grid');
-                        
-                        // Prüfen, ob für den Teilnehmer schon eine Box da ist
-                        let card = document.getElementById(`participant-${participant.identity}`);
-                        if (!card) {
-                            card = document.createElement('div');
-                            card.className = 'cam-card';
-                            card.id = `participant-${participant.identity}`;
-                            card.innerHTML = `<h3>${participant.identity}</h3>`;
-                            grid.appendChild(card);
-                        }
-
-                        const element = track.attach();
-                        card.appendChild(element);
-                    }
-                });
-
-                await room.connect(LIVEKIT_URL, data.token);
-                console.log('Zentrale ist mit dem Raum verbunden.');
-                document.getElementById('connect-btn').style.display = 'none';
-
-            } catch (err) {
-                alert('Fehler: ' + err.message);
-            }
-        });
-    </script>
+    <!-- JavaScript Logik einbinden -->
+    <script src="index.js"></script>
 </body>
 </html>
